@@ -8,24 +8,16 @@
 
 // TODO change when deploying
 // monkey-patch load to prepend asset URL
+THREE.BaseURL = 'http://localhost:8000/'
+
 THREE.OBJLoader.prototype.originalLoad = THREE.OBJLoader.prototype.load;
 THREE.OBJLoader.prototype.load = function (path, callback) {
-    this.originalLoad('http://localhost:8000/meshes/' + path, callback);
+    return this.originalLoad(THREE.BaseURL + 'meshes/' + path, callback);
 };
 
-
-THREE.Cache = { materials: new Map() };
-
-THREE.Cache.getMaterial = function (color) {
-    var key = (typeof color == 'number' ? color : color.getHex()),
-        material = this.materials.get(key);
-
-    if (!material) {
-        material = new THREE.MeshLambertMaterial({ color: color });
-        this.materials.set(key, material);
-    }
-
-    return material;
+THREE.TextureLoader.prototype.originalLoad = THREE.TextureLoader.prototype.load;
+THREE.TextureLoader.prototype.load = function (path, callback) {
+    return this.originalLoad(THREE.BaseURL + 'img/' + path, callback);
 };
 
 THREE.Object3D.prototype.addLineToPointWithColor = function
@@ -57,6 +49,22 @@ THREE.Object3D.prototype.addLineFromPointToPointWithColor = function
     return line;
 };
 
+// Super Simple Cache
+THREE.Cache = { materials: new Map() };
+
+THREE.Cache.getMaterial = function (color) {
+    var key = (typeof color == 'number' ? color : color.getHex()),
+        material = this.materials.get(key);
+
+    if (!material) {
+        material = new THREE.MeshLambertMaterial({ color: color });
+        this.materials.set(key, material);
+    }
+
+    return material;
+};
+
+
 // Snap! Additions ///////////////////////////////////////////////////////
 
 // Unfortunately, there are some things I can't do without monkey-patching
@@ -68,7 +76,7 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.setColorDimension = function (idx, num) {
         var stage = this.parent;
         this.originalSetColorDimension(idx, num);
-        if (stage.beetleController) {
+        if (stage?.beetleController) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
         }
     };
@@ -77,7 +85,7 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.setColor = function (aColor) {
         var stage = this.parent;
         this.originalSetColor(aColor);
-        if (stage.beetleController) {
+        if (stage?.beetleController) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
         }
     };
@@ -86,7 +94,7 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.setPenDown = function (bool, noShadow) {
         var stage = this.parent;
         this.originalSetPenDown(bool, noShadow);
-        if (stage.beetleController) {
+        if (stage?.beetleController) {
             if (bool) {
                 stage.beetleController.beetle.startRecordingExtrusionFace(
                     this.xPosition() / 100,
@@ -103,7 +111,7 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.moveBy = function (delta, justMe) {
         var stage = this.parent;
         this.originalMoveBy(delta, justMe);
-    if (stage.beetleController) {
+    if (stage?.beetleController) {
             if (stage.beetleController.beetle.recordingExtrusionFace) {
                 stage.beetleController.beetle.recordExtrusionFacePoint(
                     this.xPosition() / 100,
@@ -153,14 +161,19 @@ Beetle.prototype.init = function (controller) {
 
     this.reset();
 
-    this.axes = [];
     // beetle's local axis lines
-    p = new THREE.Vector3(1,0,0);
-    this.axes.push(this.addLineToPointWithColor(p, 0x00E11E));
-    p = new THREE.Vector3(0,1,0);
-    this.axes.push(this.addLineToPointWithColor(p, 0x0000FF));
-    p = new THREE.Vector3(0,0,1);
-    this.axes.push(this.addLineToPointWithColor(p, 0xFF0000));
+    this.axes = [];
+    [
+        [[1,0,0], 0x00E11E],
+        [[0,1,0], 0x0000FF],
+        [[0,0,1], 0xFF0000]
+    ].forEach(each =>
+        this.axes.push(
+            this.addLineToPointWithColor(
+                new THREE.Vector3(...each[0]), each[1], 2
+            )
+        )
+    );
 
     this.controller.changed();
 };
@@ -239,7 +252,7 @@ Beetle.prototype.clear = function () {
     this.controller.changed();
 };
 
-Beetle.prototype.toggleVisibility = function () {
+Beetle.prototype.toggle = function () {
     this.shape.visible = !this.shape.visible;
     this.controller.changed();
 };
@@ -477,22 +490,59 @@ BeetleController.prototype.initScene = function () {
 };
 
 BeetleController.prototype.initAxes = function () {
+    this.showAxes = true;
     this.scene.axes = [];
-    this.scene.axes.push(
-        this.scene.addLineToPointWithColor(
-            new THREE.Vector3(4,0,0), 0x00E11E, 2
+    this.scene.labels = [];
+    [
+        [[4,0,0], 0x00E11E],
+        [[0,4,0], 0x0000FF],
+        [[0,0,4], 0xFF0000]
+    ].forEach(each =>
+        this.scene.axes.push(
+            this.scene.addLineToPointWithColor(
+                new THREE.Vector3(...each[0]), each[1], 2
+            )
         )
     );
-    this.scene.axes.push(
-        this.scene.addLineToPointWithColor(
-            new THREE.Vector3(0,4,0), 0x0000FF, 2
-        )
+
+    // Labels
+    var loader = new THREE.TextureLoader(),
+        axes = {
+            x: { realAxis: 'Z', color: 0xFF0000 },
+            y: { realAxis: 'X', color: 0x00E11E },
+            z: { realAxis: 'Y', color: 0x0000FF }
+        };
+
+    Object.keys(axes).forEach(
+        axis => {
+            var map = loader.load(axis + '.png', () => this.changed()),
+                material = new THREE.SpriteMaterial(
+                    { map: map, color: axes[axis].color }
+                ),
+                sprite = new THREE.Sprite(material);
+
+            map.minFilter = THREE.NearestFilter;
+
+            sprite.position['set' + axes[axis].realAxis].call(
+                sprite.position,
+                4.3
+            );
+            sprite.scale.set(0.3, 0.3, 0.3);
+            sprite.name = axis;
+
+            this.scene.labels.push(sprite);
+            this.scene.add(sprite);
+        }
     );
-    this.scene.axes.push(
-        this.scene.addLineToPointWithColor(
-            new THREE.Vector3(0,0,4), 0xFF0000, 2
-        )
-    );
+
+};
+
+BeetleController.prototype.toggleAxes = function () {
+    this.showAxes = !this.showAxes;
+    this.beetle.axes.forEach(axis => axis.visible = this.showAxes);
+    this.scene.axes.forEach(axis => axis.visible = this.showAxes);
+    this.scene.labels.forEach(label => label.visible = this.showAxes);
+    this.changed();
 };
 
 BeetleController.prototype.initOrbitControlsDiv = function () {
@@ -518,6 +568,13 @@ BeetleController.prototype.render3D = function () {
     this.renderer.render(this.scene, this.camera);
 };
 
+BeetleController.prototype.exportSTL = function () {
+    var stlString = new THREE.STLExporter().parse(this.objects);
+    saveAs(
+        new Blob([stlString], {type: 'text/plain'}),
+        (this.projectName ? this.projectName : 'objects') + '.stl'
+    );
+};
 
 // BeetleGrid ///////////////////////////////////////////////////////////
 
@@ -603,8 +660,11 @@ BeetleDialogMorph.prototype.buildContents = function () {
     this.body.fixLayout();
 
     this.addButton('ok', 'Close');
-    this.addButton('resetCamera', 'Reset Camera');
-    this.addButton('toggleGrid', 'Toggle Grid');
+    this.addButton('resetCamera', 'Recenter');
+    this.addButton('toggleGrid', 'Grid');
+    this.addButton('toggleAxes', 'Axes');
+    this.addButton('toggleBeetle', 'Beetle');
+    this.addButton('exportSTL', 'Export');
 
     this.fixLayout();
     this.controller.changed();
@@ -732,6 +792,18 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 
 BeetleDialogMorph.prototype.toggleGrid = function () {
     this.controller.grid.toggle();
+};
+
+BeetleDialogMorph.prototype.toggleAxes = function () {
+    this.controller.toggleAxes();
+};
+
+BeetleDialogMorph.prototype.toggleBeetle = function () {
+    this.controller.beetle.toggle();
+};
+
+BeetleDialogMorph.prototype.exportSTL = function () {
+    this.controller.exportSTL();
 };
 
 BeetleDialogMorph.prototype.ok = function () {
