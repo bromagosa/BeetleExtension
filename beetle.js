@@ -74,12 +74,12 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
         this.originalSetPenDown(bool, noShadow);
         if (stage.beetleController) {
             if (bool) {
-                stage.beetleController.beetle.startRecordingBaseShape(
+                stage.beetleController.beetle.startRecordingExtrusionFace(
                     this.xPosition() / 100,
                     this.yPosition() / 100
                 );
             } else {
-                stage.beetleController.beetle.stopRecordingBaseShape();
+                stage.beetleController.beetle.stopRecordingExtrusionFace();
                 stage.beetleController.changed();
             }
         }
@@ -90,13 +90,13 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
         var stage = this.parent;
         this.originalMoveBy(delta, justMe);
     if (stage.beetleController) {
-            if (stage.beetleController.beetle.recordingBaseShape) {
-                stage.beetleController.beetle.recordBaseShapePoint(
+            if (stage.beetleController.beetle.recordingExtrusionFace) {
+                stage.beetleController.beetle.recordExtrusionFacePoint(
                     this.xPosition() / 100,
                     this.yPosition() / 100
                 );
-            } else if (stage.beetleController.beetle.baseShape) {
-                stage.beetleController.beetle.translateBaseMeshBy(
+            } else if (stage.beetleController.beetle.extrusionFace) {
+                stage.beetleController.beetle.translateExtrusionFaceMeshBy(
                     delta.x / 100,
                     delta.y / 100
                 );
@@ -132,17 +132,10 @@ Beetle.prototype.init = function (controller) {
 
     // extrusion
     this.extruding = false;
-    this.recordingBaseShape = false;
-    this.baseShape = new THREE.Shape();
-    this.extrusionPoints = [];
-    this.extrusionMesh = null;
-    this.updateBaseMesh();
-
-    // drawing
-    this.drawing = false;
-    this.drawStyle = null;
-    this.spline = null;
-    this.polyline = null;
+    this.recordingExtrusionFace = false;
+    this.extrusionFace = new THREE.Shape();
+    this.lastExtrusionFaceMesh = null;
+    this.updateExtrusionFaceMesh();
 
     this.reset();
 
@@ -250,110 +243,111 @@ Beetle.prototype.setColor = function (rgbString) {
 
 // Extrusion support
 
-Beetle.prototype.startRecordingBaseShape = function (x, y) {
-    this.recordingBaseShape = true;
-    this.baseShape = new THREE.Shape();
-    this.baseShape.origin = new THREE.Vector2(x, y);
-    this.baseShape.moveTo(
-        x - this.baseShape.origin.x,
-        y - this.baseShape.origin.y
+Beetle.prototype.startRecordingExtrusionFace = function (x, y) {
+    this.recordingExtrusionFace = true;
+    this.extrusionFace = new THREE.Shape();
+    this.extrusionFace.origin = new THREE.Vector2(x, y);
+    this.extrusionFace.moveTo(
+        x - this.extrusionFace.origin.x,
+        y - this.extrusionFace.origin.y
     );
-    this.updateBaseMesh();
+    this.updateExtrusionFaceMesh();
 };
 
-Beetle.prototype.stopRecordingBaseShape = function () {
-    this.recordingBaseShape = false;
+Beetle.prototype.stopRecordingExtrusionFace = function () {
+    this.recordingExtrusionFace = false;
 };
 
-Beetle.prototype.recordBaseShapePoint = function (x, y) {
-    this.baseShape.lineTo(
-        x - this.baseShape.origin.x,
-        y - this.baseShape.origin.y
+Beetle.prototype.recordExtrusionFacePoint = function (x, y) {
+    this.extrusionFace.lineTo(
+        x - this.extrusionFace.origin.x,
+        y - this.extrusionFace.origin.y
     );
-    this.updateBaseMesh();
+    this.updateExtrusionFaceMesh();
 };
 
-Beetle.prototype.translateBaseMeshBy = function (x, y) {
-    this.baseShape =
+Beetle.prototype.translateExtrusionFaceMeshBy = function (x, y) {
+    this.extrusionFace =
         (new THREE.Shape()).setFromPoints(
-            this.baseShape.getPoints().map(
+            this.extrusionFace.getPoints().map(
                 point => point.add(new THREE.Vector2(-x, y))
             )
         );
-    this.updateBaseMesh();
+    this.updateExtrusionFaceMesh();
 };
 
-Beetle.prototype.updateBaseMesh = function () {
-    this.remove(this.baseMesh);
-    this.baseMesh = new THREE.Mesh(
-        new THREE.ShapeGeometry(this.baseShape),
+Beetle.prototype.updateExtrusionFaceMesh = function () {
+    this.remove(this.extrusionFaceMesh);
+    this.extrusionFaceMesh = new THREE.Mesh(
+        new THREE.ShapeGeometry(this.extrusionFace),
         new THREE.MeshBasicMaterial({
             color: this.color,
             side: THREE.DoubleSide
         })
     );
-    this.add(this.baseMesh);
+    this.add(this.extrusionFaceMesh);
     this.controller.changed();
 };
 
 Beetle.prototype.startExtruding = function () {
     this.extruding = true;
-    this.extrusionPoints = [ (new THREE.Vector3()).copy(this.position) ];
-
-    // TODO if no baseShape, don't extrude? make it a circle? maybe just draw?
-    this.updateExtrusion();
+    this.extrudeToCurrentPoint();
+    // TODO if no extrusionFace, don't extrude? maybe just draw?
 };
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
-    this.extrusionMesh = null;
-    this.extrusionPoints = [];
+    this.lastExtrusionFaceMesh = null;
 };
 
-Beetle.prototype.recordExtrusionPoint = function () {
-    this.extrusionPoints.push((new THREE.Vector3()).copy(this.position));
-    this.updateExtrusion();
-};
-
-Beetle.prototype.updateExtrusion = function () {
-    if (this.extrusionPoints[1]) {
-        if (this.extrusionMesh) {
-            this.controller.objects.remove(this.extrusionMesh);
+Beetle.prototype.extrudeToCurrentPoint = function () {
+    if (this.lastExtrusionFaceMesh) {
+        var positions = this.lastExtrusionFaceMesh.geometry.attributes.position,
+            points = [];
+        for (var i = 0; i < positions.count; i++) {
+            var p = new THREE.Vector3().fromBufferAttribute(positions, i);
+            // translate the point to the previous extrusion face mesh
+            this.lastExtrusionFaceMesh.localToWorld(p);
+            points.push(p);
         }
-
-        this.extrusionMesh =
-            new THREE.Mesh(
-                new THREE.ExtrudeGeometry(
-                    this.baseShape,
-                    {
-                        steps: this.extrusionPoints.length, 
-                        bevelEnabled: false,
-                        extrudePath:
-                            new THREE.CatmullRomCurve3(this.extrusionPoints)
-                    }
-                ),
-                new THREE.MeshLambertMaterial({ color: this.color })
-            );
-
-        this.controller.objects.add(this.extrusionMesh);
-        this.controller.changed();
+        positions = this.extrusionFaceMesh.geometry.attributes.position;
+        for (var i = 0; i < positions.count; i++) {
+            var p = new THREE.Vector3().fromBufferAttribute(positions, i);
+            // translate the point to the current extrusion face mesh
+            this.extrusionFaceMesh.localToWorld(p);
+            points.push(p);
+        }
+        this.newExtrusion(points);
     }
+    this.lastExtrusionFaceMesh = this.extrusionFaceMesh.clone();
+};
+
+Beetle.prototype.newExtrusion = function (points) {
+    // Make a new mesh out of a convex geometry containing all the points
+    // from the previous extrusionFaceMesh and the current one.
+    var extrusionMesh = new THREE.Mesh(
+        new THREE.ConvexGeometry(points),
+        new THREE.MeshLambertMaterial({ color: this.color })
+    );
+    console.log('Extrusion points:', points)
+    this.controller.objects.add(extrusionMesh);
+    this.controller.changed();
 };
 
 // User facing methods, called from blocks
 
 Beetle.prototype.forward = function (steps) {
     this.translateZ(Number(steps) * this.multiplierScale);
-    if (this.extruding) { this.recordExtrusionPoint(); }
     this.controller.changed();
+    if (this.extruding) { this.extrudeToCurrentPoint(); }
 };
 
 Beetle.prototype.goto = function (x, y, z) {
     if (x !== '') { this.position.setZ(Number(x)); }
     if (y !== '') { this.position.setX(Number(y)); }
     if (z !== '') { this.position.setY(Number(z)); }
-    if (this.extruding) { this.recordExtrusionPoint(); }
     this.controller.changed();
+    if (this.extruding) { this.extrudeToCurrentPoint(); }
 };
 
 Beetle.prototype.getPosition = function () {
