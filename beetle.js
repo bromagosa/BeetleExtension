@@ -14,6 +14,20 @@ THREE.OBJLoader.prototype.load = function (path, callback) {
 };
 
 
+THREE.Cache = { materials: new Map() };
+
+THREE.Cache.getMaterial = function (color) {
+    var key = (typeof color == 'number' ? color : color.getHex()),
+        material = this.materials.get(key);
+
+    if (!material) {
+        material = new THREE.MeshLambertMaterial({ color: color });
+        this.materials.set(key, material);
+    }
+
+    return material;
+};
+
 THREE.Object3D.prototype.addLineToPointWithColor = function
     (point, color, thickness)
 {
@@ -167,10 +181,7 @@ Beetle.prototype.initColor = function () {
 };
 
 Beetle.prototype.loadMeshes = function () {
-    var material =
-            new THREE.MeshLambertMaterial(
-                { color: this.color, transparent: true }
-            ),
+    var material = THREE.Cache.getMaterial(this.color);
         loader = new THREE.OBJLoader(),
         myself = this;
 
@@ -183,8 +194,7 @@ Beetle.prototype.loadMeshes = function () {
         myself.standingShape.add(object);
         object.traverse(function (child) {
             if (child instanceof THREE.Mesh) {
-                child.material =
-                    new THREE.MeshLambertMaterial({ color: 0x888888 });
+                child.material = THREE.Cache.getMaterial(0x888888);
             }
         });
         object.rotation.set(-Math.PI / 2, 0, 0);
@@ -193,8 +203,7 @@ Beetle.prototype.loadMeshes = function () {
         myself.standingShape.add(object);
         object.traverse(function (child) {
             if (child instanceof THREE.Mesh) {
-                child.material =
-                    new THREE.MeshLambertMaterial({ color: 0x222222 });
+                child.material = THREE.Cache.getMaterial(0x222222);
             }
         });
         object.rotation.set(-Math.PI / 2, 0, 0);
@@ -333,7 +342,7 @@ Beetle.prototype.newExtrusion = function (points) {
     // from the previous extrusionFaceMesh and the current one.
     var extrusionMesh = new THREE.Mesh(
         new THREE.ConvexGeometry(points),
-        new THREE.MeshLambertMaterial({ color: this.color })
+        THREE.Cache.getMaterial(this.color)
     );
     this.controller.objects.add(extrusionMesh);
     this.controller.changed();
