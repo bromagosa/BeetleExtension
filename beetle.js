@@ -410,8 +410,8 @@ BeetleController.prototype.init = function (stage) {
     this.renderWidth = 480;
     this.renderHeight = 360;
 
-    this.initScene();
     this.initRenderer();
+    this.initScene();
     this.initCamera();
     this.initLights();
     this.initOrbitControlsDiv();
@@ -471,12 +471,13 @@ BeetleController.prototype.initCamera = function () {
 };
 
 BeetleController.prototype.initScene = function () {
-    var myself = this;
-
     this.scene = new THREE.Scene();
-    this.scene.axes = [];
+    this.grid = new BeetleGrid(this);
+    this.initAxes();
+};
 
-    // Axes
+BeetleController.prototype.initAxes = function () {
+    this.scene.axes = [];
     this.scene.axes.push(
         this.scene.addLineToPointWithColor(
             new THREE.Vector3(4,0,0), 0x00E11E, 2
@@ -517,6 +518,53 @@ BeetleController.prototype.render3D = function () {
     this.renderer.render(this.scene, this.camera);
 };
 
+
+// BeetleGrid ///////////////////////////////////////////////////////////
+
+function BeetleGrid (controller) {
+    this.init(controller);
+};
+
+BeetleGrid.prototype.init = function (controller) {
+    this.controller = controller;
+    this.color = 0x888888;
+    this.visible = true;
+    this.draw();
+};
+
+BeetleGrid.prototype.draw = function () {
+    this.lines = [];
+
+    for (x = -10; x <= 10; x++) {
+        l = this.controller.scene.addLineFromPointToPointWithColor(
+            new THREE.Vector3(x, 0, -10),
+            new THREE.Vector3(x, 0, 10),
+            this.color
+        );
+        l.visible = this.visible;
+        this.lines.push(l);
+    }
+
+    for (y = -10; y <= 10; y++) {
+        l = this.controller.scene.addLineFromPointToPointWithColor(
+            new THREE.Vector3(-10, 0, y),
+            new THREE.Vector3(10, 0, y),
+            this.color
+        );
+        l.visible = this.visible;
+        this.lines.push(l);
+    }
+
+    this.controller.changed();
+};
+
+BeetleGrid.prototype.toggle = function () {
+    this.visible = !this.visible;
+    this.lines.forEach(line => line.visible = this.visible);
+    this.controller.changed();
+};
+
+
 // BeetleDialogMorph ////////////////////////////////////////////////////
 
 // BeetleDialogMorph inherits from DialogBoxMorph:
@@ -556,6 +604,7 @@ BeetleDialogMorph.prototype.buildContents = function () {
 
     this.addButton('ok', 'Close');
     this.addButton('resetCamera', 'Reset Camera');
+    this.addButton('toggleGrid', 'Toggle Grid');
 
     this.fixLayout();
     this.controller.changed();
@@ -679,6 +728,10 @@ BeetleDialogMorph.prototype.initControls = function () {
 BeetleDialogMorph.prototype.resetCamera = function () {
     this.controller.camera.reset();
     this.initControls();
+};
+
+BeetleDialogMorph.prototype.toggleGrid = function () {
+    this.controller.grid.toggle();
 };
 
 BeetleDialogMorph.prototype.ok = function () {
