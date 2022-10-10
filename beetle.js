@@ -244,14 +244,17 @@ Beetle.prototype.setColor = function (rgbString) {
 // Extrusion support
 
 Beetle.prototype.startRecordingExtrusionFace = function (x, y) {
-    this.recordingExtrusionFace = true;
-    this.extrusionFace = new THREE.Shape();
-    this.extrusionFace.origin = new THREE.Vector2(x, y);
-    this.extrusionFace.moveTo(
-        x - this.extrusionFace.origin.x,
-        y - this.extrusionFace.origin.y
-    );
-    this.updateExtrusionFaceMesh();
+    // ignore consecutive pen down instructions
+    if (!this.recordingExtrusionFace) {
+        this.recordingExtrusionFace = true;
+        this.extrusionFace = new THREE.Shape();
+        this.extrusionFace.origin = new THREE.Vector2(x, y);
+        this.extrusionFace.moveTo(
+            x - this.extrusionFace.origin.x,
+            y - this.extrusionFace.origin.y
+        );
+        this.updateExtrusionFaceMesh();
+    }
 };
 
 Beetle.prototype.stopRecordingExtrusionFace = function () {
@@ -267,13 +270,14 @@ Beetle.prototype.recordExtrusionFacePoint = function (x, y) {
 };
 
 Beetle.prototype.translateExtrusionFaceMeshBy = function (x, y) {
-    this.extrusionFace =
-        (new THREE.Shape()).setFromPoints(
-            this.extrusionFace.getPoints().map(
-                point => point.add(new THREE.Vector2(-x, y))
-            )
-        );
-    this.updateExtrusionFaceMesh();
+    var points = this.extrusionFace.getPoints();
+    if (points[0]) {
+        this.extrusionFace =
+            (new THREE.Shape()).setFromPoints(
+                points.map(point => point.add(new THREE.Vector2(-x, y)))
+            );
+        this.updateExtrusionFaceMesh();
+    }
 };
 
 Beetle.prototype.updateExtrusionFaceMesh = function () {
@@ -286,6 +290,7 @@ Beetle.prototype.updateExtrusionFaceMesh = function () {
         })
     );
     this.add(this.extrusionFaceMesh);
+    this.updateMatrixWorld();
     this.controller.changed();
 };
 
@@ -301,6 +306,7 @@ Beetle.prototype.stopExtruding = function () {
 };
 
 Beetle.prototype.extrudeToCurrentPoint = function () {
+    this.updateMatrixWorld();
     if (this.lastExtrusionFaceMesh) {
         var positions = this.lastExtrusionFaceMesh.geometry.attributes.position,
             points = [];
@@ -314,7 +320,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
         for (var i = 0; i < positions.count; i++) {
             var p = new THREE.Vector3().fromBufferAttribute(positions, i);
             // translate the point to the current extrusion face mesh
-            this.extrusionFaceMesh.localToWorld(p);
+            this.localToWorld(p);
             points.push(p);
         }
         this.newExtrusion(points);
@@ -329,7 +335,6 @@ Beetle.prototype.newExtrusion = function (points) {
         new THREE.ConvexGeometry(points),
         new THREE.MeshLambertMaterial({ color: this.color })
     );
-    console.log('Extrusion points:', points)
     this.controller.objects.add(extrusionMesh);
     this.controller.changed();
 };
