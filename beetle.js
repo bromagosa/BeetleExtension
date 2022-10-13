@@ -1,7 +1,7 @@
 // 3D extension for 3D rendering and fabrication
 // extensively inspired in Beetle Blocks 
 // ---------------------------------------------
-// Bernat Romagosa i Carrasquer, October 2022
+// 🄯 Bernat Romagosa i Carrasquer, October 2022
 
 // THREE.js additions ///////////////////////////////////////////////////
 
@@ -57,7 +57,9 @@ THREE.Cache.getMaterial = function (color) {
         material = this.materials.get(key);
 
     if (!material) {
-        material = new THREE.MeshLambertMaterial({ color: color });
+        material = new THREE.MeshLambertMaterial(
+            { color: color, side: THREE.DoubleSide }
+        );
         this.materials.set(key, material);
     }
 
@@ -327,36 +329,75 @@ Beetle.prototype.stopExtruding = function () {
     this.lastExtrusionFaceMesh = null;
 };
 
+// Actual extrusion mesh building.
+// Makes a [truncated] prism out of the previous face and the current one.
+
 Beetle.prototype.extrudeToCurrentPoint = function () {
     this.updateMatrixWorld();
     if (this.lastExtrusionFaceMesh) {
-        var positions = this.lastExtrusionFaceMesh.geometry.attributes.position,
-            points = [];
-        for (var i = 0; i < positions.count; i++) {
-            var p = new THREE.Vector3().fromBufferAttribute(positions, i);
+        var facePostions =
+                this.lastExtrusionFaceMesh.geometry.attributes.position,
+            numVertices = facePostions.count * 2,
+            extrusionPositions =
+                new Float32Array(numVertices * 3); // 3 components per vertex
+
+        for (var i = 0; i < facePostions.count * 3; i += 3) {
+            var p = new THREE.Vector3().fromBufferAttribute(facePostions, i/3);
             // translate the point to the previous extrusion face mesh
             this.lastExtrusionFaceMesh.localToWorld(p);
-            points.push(p);
+            extrusionPositions.set([p.x, p.y, p.z], i);
         }
-        positions = this.extrusionFaceMesh.geometry.attributes.position;
-        for (var i = 0; i < positions.count; i++) {
-            var p = new THREE.Vector3().fromBufferAttribute(positions, i);
+        facePostions = this.extrusionFaceMesh.geometry.attributes.position;
+        for (var i = 0; i < facePostions.count * 3; i += 3) {
+            var p = new THREE.Vector3().fromBufferAttribute(facePostions, i/3);
             // translate the point to the current extrusion face mesh
             this.localToWorld(p);
-            points.push(p);
+            extrusionPositions.set(
+                [p.x, p.y, p.z],
+                (facePostions.count * 3) + i
+            );
         }
-        this.newExtrusion(points);
+        this.newExtrusion(extrusionPositions);
     }
     this.lastExtrusionFaceMesh = this.extrusionFaceMesh.clone();
 };
 
-Beetle.prototype.newExtrusion = function (points) {
+Beetle.prototype.newExtrusion = function (extrusionPositions) {
     // Make a new mesh out of a convex geometry containing all the points
     // from the previous extrusionFaceMesh and the current one.
+    var extrusionGeometry = new THREE.BufferGeometry(),
+        // one face per vertex
+        prismFaceCount = (extrusionPositions.length / 3 / 2),
+        baseIndex = this.extrusionFaceMesh.geometry.index.array,
+        index = [];
+
+    extrusionGeometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(extrusionPositions, 3)
+    );
+
+    // Add base shape indices.
+    index.push(...baseIndex);
+    index.push(...baseIndex.map(v => v + prismFaceCount).reverse());
+
+    for (n = 0; n < prismFaceCount - 1; n++) {
+        index.push(...[n + prismFaceCount, n + 1, n + prismFaceCount + 1]);
+        index.push(...[n, n + 1, n + prismFaceCount]);
+    }
+
+    // Missing one face??? O_O
+
+    extrusionGeometry.setIndex(index);
+
+    extrusionGeometry.computeVertexNormals();
+
+    // Time to manually compute the face normals :'(
+
     var extrusionMesh = new THREE.Mesh(
-        new THREE.ConvexGeometry(points),
+        extrusionGeometry,
         THREE.Cache.getMaterial(this.color)
     );
+
     this.controller.objects.add(extrusionMesh);
     this.controller.changed();
 };
