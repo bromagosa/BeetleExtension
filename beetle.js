@@ -58,7 +58,7 @@ THREE.Cache.getMaterial = function (color) {
 
     if (!material) {
         material = new THREE.MeshLambertMaterial(
-            { color: color, side: THREE.DoubleSide }
+            { color: color/*, side: THREE.DoubleSide */}
         );
         this.materials.set(key, material);
     }
@@ -367,31 +367,73 @@ Beetle.prototype.newExtrusion = function (extrusionPositions) {
     // from the previous extrusionFaceMesh and the current one.
     var extrusionGeometry = new THREE.BufferGeometry(),
         // one face per vertex
-        prismFaceCount = (extrusionPositions.length / 3 / 2),
+        baseEdgeCount = (extrusionPositions.length / 3 / 2),
         baseIndex = this.extrusionFaceMesh.geometry.index.array,
-        index = [];
+        index = [],
+        normals = [];
 
     extrusionGeometry.setAttribute(
         'position',
         new THREE.BufferAttribute(extrusionPositions, 3)
     );
 
-    // Add base shape indices.
-    index.push(...baseIndex);
-    index.push(...baseIndex.map(v => v + prismFaceCount).reverse());
-
-    for (n = 0; n < prismFaceCount - 1; n++) {
-        index.push(...[n + prismFaceCount, n + 1, n + prismFaceCount + 1]);
-        index.push(...[n, n + 1, n + prismFaceCount]);
+    // I found this pattern after filling many pages of my notebook with
+    // triangles and vertex numbers. Do not ever change it! If something fails,
+    // it's something else!
+    for (n = 0; n < baseEdgeCount; n++) {
+        index.push(
+            n,
+            n + baseEdgeCount,
+            baseEdgeCount + (n + 1) % baseEdgeCount,
+        );
+        index.push(
+            baseEdgeCount + (n + 1) % baseEdgeCount,
+            (n + 1) % baseEdgeCount,
+            n
+        );
     }
 
-    // Missing one face??? O_O
+    // Add base shape indices.
+    index.push(...[...baseIndex].reverse()); // reverse a copy of the index
+    index.push(...baseIndex.map(v => v + baseEdgeCount));
 
     extrusionGeometry.setIndex(index);
 
-    extrusionGeometry.computeVertexNormals();
+    // Manually compute the face normals. Not working :'(
 
-    // Time to manually compute the face normals :'(
+    // For each triangle
+    for (i = 0; i < index.length; i += 3) {
+        // Get the 3 points that make the triangle
+        var p1 = [
+            extrusionPositions[i * 3],
+            extrusionPositions[i * 3 + 1],
+            extrusionPositions[i * 3 + 2]],
+        p2 = [
+            extrusionPositions[(i + 1) * 3],
+            extrusionPositions[(i + 1) * 3 + 1],
+            extrusionPositions[(i + 1) * 3 + 2]],
+        p3 = [
+            extrusionPositions[(i + 2) * 3],
+            extrusionPositions[(i + 2) * 3 + 1],
+            extrusionPositions[(i + 2) * 3 + 2]],
+
+        // Wikipedia formula for triangle normals
+        a = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]],
+        b = [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]];
+
+        for (a = 0; a<3; a++) {
+            normals.push(
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            );
+        }
+    }
+
+    extrusionGeometry.setAttribute(
+        'normal',
+        new THREE.BufferAttribute(new Float32Array(normals), 3)
+    );
 
     var extrusionMesh = new THREE.Mesh(
         extrusionGeometry,
