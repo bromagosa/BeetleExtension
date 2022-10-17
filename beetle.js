@@ -335,39 +335,95 @@ Beetle.prototype.stopExtruding = function () {
 Beetle.prototype.extrudeToCurrentPoint = function () {
     this.updateMatrixWorld();
     if (this.lastExtrusionFaceMesh) {
-        var facePostions =
+        var facePositions =
                 this.lastExtrusionFaceMesh.geometry.attributes.position,
-            numVertices = facePostions.count * 2,
+            numSides = facePositions.count
+            numVertices = numSides * 2 + numSides * 4, // prism faces are rects
             extrusionPositions =
                 new Float32Array(numVertices * 3); // 3 components per vertex
 
-        for (var i = 0; i < facePostions.count * 3; i += 3) {
-            var p = new THREE.Vector3().fromBufferAttribute(facePostions, i/3);
+        // Back face
+        for (var i = 0; i < numSides * 3; i += 3) {
+            var p = new THREE.Vector3().fromBufferAttribute(facePositions, i/3);
             // translate the point to the previous extrusion face mesh
             this.lastExtrusionFaceMesh.localToWorld(p);
             extrusionPositions.set([p.x, p.y, p.z], i);
         }
-        facePostions = this.extrusionFaceMesh.geometry.attributes.position;
-        for (var i = 0; i < facePostions.count * 3; i += 3) {
-            var p = new THREE.Vector3().fromBufferAttribute(facePostions, i/3);
+        // Front face
+        facePositions = this.extrusionFaceMesh.geometry.attributes.position;
+        for (var i = 0; i < numSides * 3; i += 3) {
+            var p = new THREE.Vector3().fromBufferAttribute(facePositions, i/3);
             // translate the point to the current extrusion face mesh
             this.localToWorld(p);
             extrusionPositions.set(
                 [p.x, p.y, p.z],
-                (facePostions.count * 3) + i
+                numSides * 3 + i
             );
         }
-        this.newExtrusion(extrusionPositions);
+        // Prism sides, one per vertex in prism base
+        var writeOffset = numSides * 3 * 2;
+        for (var i = 0; i < numSides; i ++) {
+            // TODO refactor this!
+            // For each side, we take the vertices:
+            //          v
+            //          (v + 1) % vCount
+            //
+            //          v + vCount
+            //          (v + vCount + 1) % (vCount * 2)
+            var readOffset = i * 3;
+            extrusionPositions.set(
+                [
+                    extrusionPositions[readOffset],     // x
+                    extrusionPositions[readOffset + 1], // y
+                    extrusionPositions[readOffset + 2]  // z
+                ],
+                writeOffset
+            );
+            writeOffset += 3;
+
+            readOffset = (readOffset + 3) % (numSides * 3);
+            extrusionPositions.set(
+                [
+                    extrusionPositions[readOffset],     // x
+                    extrusionPositions[readOffset + 1], // y
+                    extrusionPositions[readOffset + 2]  // z
+                ],
+                writeOffset
+            );
+            writeOffset += 3;
+
+            readOffset = (i + numSides) * 3;
+            extrusionPositions.set(
+                [
+                    extrusionPositions[readOffset],     // x
+                    extrusionPositions[readOffset + 1], // y
+                    extrusionPositions[readOffset + 2]  // z
+                ],
+                writeOffset
+            );
+            writeOffset += 3;
+
+            readOffset = (((i + 1) % numSides) + numSides) * 3;
+            extrusionPositions.set(
+                [
+                    extrusionPositions[readOffset],     // x
+                    extrusionPositions[readOffset + 1], // y
+                    extrusionPositions[readOffset + 2]  // z
+                ],
+                writeOffset
+            );
+            writeOffset += 3;
+        }
+        this.newExtrusion(extrusionPositions, numSides);
     }
     this.lastExtrusionFaceMesh = this.extrusionFaceMesh.clone();
 };
 
-Beetle.prototype.newExtrusion = function (extrusionPositions) {
+Beetle.prototype.newExtrusion = function (extrusionPositions, sideCount) {
     // Make a new mesh out of a convex geometry containing all the points
     // from the previous extrusionFaceMesh and the current one.
     var extrusionGeometry = new THREE.BufferGeometry(),
         // one face per vertex
-        baseEdgeCount = (extrusionPositions.length / 3 / 2),
         baseIndex = this.extrusionFaceMesh.geometry.index.array,
         index = [],
         normals = [];
@@ -377,63 +433,28 @@ Beetle.prototype.newExtrusion = function (extrusionPositions) {
         new THREE.BufferAttribute(extrusionPositions, 3)
     );
 
-    // I found this pattern after filling many pages of my notebook with
-    // triangles and vertex numbers. Do not ever change it! If something fails,
-    // it's something else!
-    for (n = 0; n < baseEdgeCount; n++) {
-        index.push(
-            n,
-            n + baseEdgeCount,
-            baseEdgeCount + (n + 1) % baseEdgeCount,
-        );
-        index.push(
-            baseEdgeCount + (n + 1) % baseEdgeCount,
-            (n + 1) % baseEdgeCount,
-            n
-        );
-    }
-
     // Add base shape indices.
     index.push(...[...baseIndex].reverse()); // reverse a copy of the index
-    index.push(...baseIndex.map(v => v + baseEdgeCount));
+    index.push(...baseIndex.map(v => v + sideCount));
+
+    for (n = 0; n < sideCount * 4; n += 4) {
+        // 4 vertices per prism face
+        var offset = n + sideCount * 2;
+        index.push(
+            offset,
+            offset + 2,
+            offset + 3
+        );
+        index.push(
+            offset + 3,
+            offset + 1,
+            offset
+        );
+    }
 
     extrusionGeometry.setIndex(index);
 
-    // Manually compute the face normals. Not working :'(
-
-    // For each triangle
-    for (i = 0; i < index.length; i += 3) {
-        // Get the 3 points that make the triangle
-        var p1 = [
-            extrusionPositions[i * 3],
-            extrusionPositions[i * 3 + 1],
-            extrusionPositions[i * 3 + 2]],
-        p2 = [
-            extrusionPositions[(i + 1) * 3],
-            extrusionPositions[(i + 1) * 3 + 1],
-            extrusionPositions[(i + 1) * 3 + 2]],
-        p3 = [
-            extrusionPositions[(i + 2) * 3],
-            extrusionPositions[(i + 2) * 3 + 1],
-            extrusionPositions[(i + 2) * 3 + 2]],
-
-        // Wikipedia formula for triangle normals
-        a = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]],
-        b = [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]];
-
-        for (a = 0; a<3; a++) {
-            normals.push(
-                a[1] * b[2] - a[2] * b[1],
-                a[2] * b[0] - a[0] * b[2],
-                a[0] * b[1] - a[1] * b[0]
-            );
-        }
-    }
-
-    extrusionGeometry.setAttribute(
-        'normal',
-        new THREE.BufferAttribute(new Float32Array(normals), 3)
-    );
+    extrusionGeometry.computeVertexNormals();
 
     var extrusionMesh = new THREE.Mesh(
         extrusionGeometry,
