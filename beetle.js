@@ -313,6 +313,7 @@ Beetle.prototype.updateExtrusionFaceMesh = function () {
             side: THREE.DoubleSide
         })
     );
+    this.extrusionFaceMesh.scale.setScalar(this.multiplierScale);
     this.add(this.extrusionFaceMesh);
     this.updateMatrixWorld();
     this.controller.changed();
@@ -354,7 +355,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
         for (var i = 0; i < numSides * 3; i += 3) {
             var p = new THREE.Vector3().fromBufferAttribute(facePositions, i/3);
             // translate the point to the current extrusion face mesh
-            this.localToWorld(p);
+            this.extrusionFaceMesh.localToWorld(p);
             extrusionPositions.set(
                 [p.x, p.y, p.z],
                 numSides * 3 + i
@@ -510,6 +511,11 @@ Beetle.prototype.rotate = function (x, y, z) {
 Beetle.prototype.pointTo = function (x, y, z) {
     this.lookAt(new THREE.Vector3(Number(y), Number(z), Number(x)));
     this.controller.changed();
+};
+
+Beetle.prototype.setScale = function (scale) {
+    this.multiplierScale = scale;
+    this.updateExtrusionFaceMesh();
 };
 
 
@@ -988,4 +994,16 @@ SnapExtensions.primitives.set('bb_stopextruding()', function () {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
     stage.beetleController.beetle.stopExtruding();
+});
+
+SnapExtensions.primitives.set('bb_setscale(scale)', function (scale) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.setScale(scale);
+});
+
+SnapExtensions.primitives.set('bb_scale()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.multiplierScale;
 });
