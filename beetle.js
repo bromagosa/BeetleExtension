@@ -58,7 +58,7 @@ THREE.Cache.getMaterial = function (color) {
 
     if (!material) {
         material = new THREE.MeshLambertMaterial(
-            { color: color/*, side: THREE.DoubleSide */}
+            { color: color, side: THREE.DoubleSide }
         );
         this.materials.set(key, material);
     }
@@ -196,7 +196,7 @@ Beetle.prototype.initColor = function () {
 };
 
 Beetle.prototype.loadMeshes = function () {
-    var material = THREE.Cache.getMaterial(this.color);
+    var material = new THREE.MeshLambertMaterial({ color: this.color }),
         loader = new THREE.OBJLoader(),
         myself = this;
 
@@ -319,12 +319,6 @@ Beetle.prototype.updateExtrusionFaceMesh = function () {
     this.controller.changed();
 };
 
-Beetle.prototype.startExtruding = function () {
-    this.extruding = true;
-    this.extrudeToCurrentPoint();
-    // TODO if no extrusionFace, don't extrude? maybe just draw?
-};
-
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
     this.lastExtrusionFaceMesh = null;
@@ -334,14 +328,17 @@ Beetle.prototype.stopExtruding = function () {
 // Makes a [truncated] prism out of the previous face and the current one.
 
 Beetle.prototype.extrudeToCurrentPoint = function () {
+    // TODO if no extrusionFace, draw lines.
+    this.extruding = true;
     this.updateMatrixWorld();
     if (this.lastExtrusionFaceMesh) {
         var facePositions =
                 this.lastExtrusionFaceMesh.geometry.attributes.position,
-            numSides = facePositions.count
+            numSides = facePositions.count,
             numVertices = numSides * 2 + numSides * 4, // prism faces are rects
             extrusionPositions =
-                new Float32Array(numVertices * 3); // 3 components per vertex
+                new Float32Array(numVertices * 3), // 3 components per vertex
+            readOffset, writeOffset;
 
         // Back face
         for (var i = 0; i < numSides * 3; i += 3) {
@@ -350,6 +347,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             this.lastExtrusionFaceMesh.localToWorld(p);
             extrusionPositions.set([p.x, p.y, p.z], i);
         }
+
         // Front face
         facePositions = this.extrusionFaceMesh.geometry.attributes.position;
         for (var i = 0; i < numSides * 3; i += 3) {
@@ -361,17 +359,12 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                 numSides * 3 + i
             );
         }
+
         // Prism sides, one per vertex in prism base
-        var writeOffset = numSides * 3 * 2;
-        for (var i = 0; i < numSides; i ++) {
-            // TODO refactor this!
-            // For each side, we take the vertices:
-            //          v
-            //          (v + 1) % vCount
-            //
-            //          v + vCount
-            //          (v + vCount + 1) % (vCount * 2)
-            var readOffset = i * 3;
+
+        // Do not ever change this code. It took AGES to get right and it works
+        // great now. If something fails, look somewhere else first.
+        function addPositions() {
             extrusionPositions.set(
                 [
                     extrusionPositions[readOffset],     // x
@@ -381,53 +374,37 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                 writeOffset
             );
             writeOffset += 3;
+        };
+
+        writeOffset = numSides * 3 * 2;
+        for (var i = 0; i < numSides; i ++) {
+            readOffset = i * 3;
+            addPositions();
 
             readOffset = (readOffset + 3) % (numSides * 3);
-            extrusionPositions.set(
-                [
-                    extrusionPositions[readOffset],     // x
-                    extrusionPositions[readOffset + 1], // y
-                    extrusionPositions[readOffset + 2]  // z
-                ],
-                writeOffset
-            );
-            writeOffset += 3;
+            addPositions();
 
             readOffset = (i + numSides) * 3;
-            extrusionPositions.set(
-                [
-                    extrusionPositions[readOffset],     // x
-                    extrusionPositions[readOffset + 1], // y
-                    extrusionPositions[readOffset + 2]  // z
-                ],
-                writeOffset
-            );
-            writeOffset += 3;
+            addPositions();
 
             readOffset = (((i + 1) % numSides) + numSides) * 3;
-            extrusionPositions.set(
-                [
-                    extrusionPositions[readOffset],     // x
-                    extrusionPositions[readOffset + 1], // y
-                    extrusionPositions[readOffset + 2]  // z
-                ],
-                writeOffset
-            );
-            writeOffset += 3;
+            addPositions();
         }
-        this.newExtrusion(extrusionPositions, numSides);
+
+        this.makePrismMesh(extrusionPositions, numSides);
     }
+
     this.lastExtrusionFaceMesh = this.extrusionFaceMesh.clone();
 };
 
-Beetle.prototype.newExtrusion = function (extrusionPositions, sideCount) {
-    // Make a new mesh out of a convex geometry containing all the points
-    // from the previous extrusionFaceMesh and the current one.
+Beetle.prototype.makePrismMesh = function (extrusionPositions, sideCount) {
+    // Make a new mesh out of all the vertex positions created by the
+    // extrudeToCurrentPoint method.
     var extrusionGeometry = new THREE.BufferGeometry(),
-        // one face per vertex
         baseIndex = this.extrusionFaceMesh.geometry.index.array,
         index = [],
-        normals = [];
+        normals = [],
+        offset;
 
     extrusionGeometry.setAttribute(
         'position',
@@ -438,31 +415,23 @@ Beetle.prototype.newExtrusion = function (extrusionPositions, sideCount) {
     index.push(...[...baseIndex].reverse()); // reverse a copy of the index
     index.push(...baseIndex.map(v => v + sideCount));
 
+    // Add indices for all prism faces. Since faces are always rectangles,
+    // there are 4 vertices per prism face.
     for (n = 0; n < sideCount * 4; n += 4) {
-        // 4 vertices per prism face
-        var offset = n + sideCount * 2;
-        index.push(
-            offset,
-            offset + 2,
-            offset + 3
-        );
-        index.push(
-            offset + 3,
-            offset + 1,
-            offset
-        );
+        offset = n + sideCount * 2;
+        index.push(offset, offset + 2, offset + 3);
+        index.push(offset + 3, offset + 1, offset);
     }
 
     extrusionGeometry.setIndex(index);
-
     extrusionGeometry.computeVertexNormals();
 
-    var extrusionMesh = new THREE.Mesh(
-        extrusionGeometry,
-        THREE.Cache.getMaterial(this.color)
+    this.controller.objects.add(
+        new THREE.Mesh(
+            extrusionGeometry,
+            THREE.Cache.getMaterial(this.color)
+        )
     );
-
-    this.controller.objects.add(extrusionMesh);
     this.controller.changed();
 };
 
@@ -987,7 +956,7 @@ SnapExtensions.primitives.set('bb_pointto(x, y, z)', function (x, y, z) {
 SnapExtensions.primitives.set('bb_startextruding()', function () {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
-    stage.beetleController.beetle.startExtruding();
+    stage.beetleController.beetle.extrudeToCurrentPoint();
 });
 
 SnapExtensions.primitives.set('bb_stopextruding()', function () {
