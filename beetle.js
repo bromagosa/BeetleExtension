@@ -323,15 +323,14 @@ Beetle.prototype.stopExtruding = function () {
 };
 
 // Actual extrusion mesh building.
-// Makes a [truncated] prism out of the previous face and the current one.
-
 Beetle.prototype.extrudeToCurrentPoint = function () {
-    // TODO if no extrusionFace, draw lines.
     this.extruding = true;
     this.updateMatrixWorld();
     if (this.extrusionFace.getPoints()[0]) {
+        // if there's a base face, extrude
         this.makePrism();
     } else {
+        // otherwise, draw a line
         this.controller.objects.addLineFromPointToPointWithColor(
             this.lastPosition,
             this.position,
@@ -342,7 +341,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
 };
 
 Beetle.prototype.makePrism = function () {
-    // computes the vertices for a truncated prism with the previous face and
+    // Computes the vertices for a truncated prism with the previous face and
     // current face as end shapes, then calls makePrismMesh to actually build
     // and add the 3D object to the scene
     if (this.lastExtrusionFaceMesh) {
@@ -457,41 +456,41 @@ Beetle.prototype.forward = function (steps) {
 
 Beetle.prototype.goto = function (x, y, z) {
     this.lastPosition = this.position.clone();
-    if (x !== '') { this.position.setZ(Number(x)); }
-    if (y !== '') { this.position.setX(Number(y)); }
-    if (z !== '') { this.position.setY(Number(z)); }
+    if (x !== '') { this.position.setX(Number(x)); }
+    if (y !== '') { this.position.setY(Number(y)); }
+    if (z !== '') { this.position.setZ(Number(z)); }
     this.controller.changed();
     if (this.extruding) { this.extrudeToCurrentPoint(); }
 };
 
 Beetle.prototype.getPosition = function () {
-    return new List([ this.position.z, this.position.x, this.position.y ]);
+    return new List([ this.position.x, this.position.y, this.position.z ]);
 };
 
 Beetle.prototype.setRotations = function (x, y, z) {
-    if (x !== '') { this.rotation.z = radians(Number(x) * -1); }
-    if (y !== '') { this.rotation.x = radians(Number(y) * -1); }
-    if (z !== '') { this.rotation.y = radians(Number(z)); }
+    if (x !== '') { this.rotation.x = radians(Number(x) * -1); }
+    if (y !== '') { this.rotation.y = radians(Number(y) * -1); }
+    if (z !== '') { this.rotation.z = radians(Number(z)); }
     this.controller.changed();
 };
 
 Beetle.prototype.getRotation = function () {
     return new List([
-        degrees(this.rotation.z * -1),
         degrees(this.rotation.x * -1),
-        degrees(this.rotation.y)
+        degrees(this.rotation.y),
+        degrees(this.rotation.z * -1)
     ]);
 };
 
 Beetle.prototype.rotate = function (x, y, z) {
-    if (x !== '') { this.rotateZ(radians(Number(x) * -1)); }
-    if (y !== '') { this.rotateX(radians(Number(y) * -1)); }
-    if (z !== '') { this.rotateY(radians(Number(z))); }
+    if (x !== '') { this.rotateX(radians(Number(x) * -1)); }
+    if (y !== '') { this.rotateY(radians(Number(y) * -1)); }
+    if (z !== '') { this.rotateZ(radians(Number(z))); }
     this.controller.changed();
 };
 
 Beetle.prototype.pointTo = function (x, y, z) {
-    this.lookAt(new THREE.Vector3(Number(y), Number(z), Number(x)));
+    this.lookAt(new THREE.Vector3(Number(x), Number(y), Number(z)));
     this.controller.changed();
 };
 
@@ -528,7 +527,7 @@ BeetleController.prototype.init = function (stage) {
 };
 
 BeetleController.prototype.open = function () {
-    if (!this.dialog) {
+    if (!this.stage.world().childThatIsA(BeetleDialogMorph)) {
         this.dialog = new BeetleDialogMorph(
             this.stage,
             this
@@ -585,6 +584,7 @@ BeetleController.prototype.initAxes = function () {
     this.showAxes = true;
     this.scene.axes = [];
     this.scene.labels = [];
+
     [
         [[4,0,0], 0x00E11E],
         [[0,4,0], 0x0000FF],
@@ -599,23 +599,19 @@ BeetleController.prototype.initAxes = function () {
 
     // Labels
     var loader = new THREE.TextureLoader(),
-        axes = {
-            x: { realAxis: 'Z', color: 0xFF0000 },
-            y: { realAxis: 'X', color: 0x00E11E },
-            z: { realAxis: 'Y', color: 0x0000FF }
-        };
+        axes = { x: 0x00E11E, y: 0x0000FF , z: 0xFF0000 };
 
     Object.keys(axes).forEach(
         axis => {
             var map = loader.load(axis + '.png', () => this.changed()),
                 material = new THREE.SpriteMaterial(
-                    { map: map, color: axes[axis].color }
+                    { map: map, color: axes[axis] }
                 ),
                 sprite = new THREE.Sprite(material);
 
             map.minFilter = THREE.NearestFilter;
 
-            sprite.position['set' + axes[axis].realAxis].call(
+            sprite.position['set' + axis.toUpperCase()].call(
                 sprite.position,
                 4.3
             );
@@ -904,7 +900,6 @@ BeetleDialogMorph.prototype.ok = function () {
 };
 
 BeetleDialogMorph.prototype.close = function () {
-    this.controller.dialog = null;
     BeetleDialogMorph.uber.destroy.call(this);
 };
 
