@@ -34,15 +34,13 @@ THREE.Object3D.prototype.addLineToPointWithColor = function
 THREE.Object3D.prototype.addLineFromPointToPointWithColor = function
     (originPoint, destinationPoint, color, thickness)
 {
-    var line,
-        geometry =
-        new THREE.BufferGeometry().setFromPoints(
+    var geometry = new THREE.BufferGeometry().setFromPoints(
             [ originPoint, destinationPoint ]
         ),
-        material =
-            new THREE.LineBasicMaterial(
-                { color: color, linewidth: (thickness ? thickness : 1) }
-            ),
+        material = new THREE.LineBasicMaterial({
+            color: color,
+            linewidth: (thickness || 1) // ignored by most WebGL implementations
+        }),
         line = new THREE.Line(geometry, material);
 
     this.add(line);
@@ -51,7 +49,6 @@ THREE.Object3D.prototype.addLineFromPointToPointWithColor = function
 
 // Super Simple Cache
 THREE.Cache = { materials: new Map() };
-
 THREE.Cache.getMaterial = function (color) {
     var key = (typeof color == 'number' ? color : color.getHex()),
         material = this.materials.get(key);
@@ -159,6 +156,7 @@ Beetle.prototype.init = function (controller) {
     this.recordingExtrusionFace = false;
     this.extrusionFace = new THREE.Shape();
     this.lastExtrusionFaceMesh = null;
+    this.lastPosition = new THREE.Vector3();
     this.updateExtrusionFaceMesh();
 
     this.reset();
@@ -331,6 +329,22 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
     // TODO if no extrusionFace, draw lines.
     this.extruding = true;
     this.updateMatrixWorld();
+    if (this.extrusionFace.getPoints()[0]) {
+        this.makePrism();
+    } else {
+        this.controller.objects.addLineFromPointToPointWithColor(
+            this.lastPosition,
+            this.position,
+            this.color,
+            this.multiplierScale
+        );
+    }
+};
+
+Beetle.prototype.makePrism = function () {
+    // computes the vertices for a truncated prism with the previous face and
+    // current face as end shapes, then calls makePrismMesh to actually build
+    // and add the 3D object to the scene
     if (this.lastExtrusionFaceMesh) {
         var facePositions =
                 this.lastExtrusionFaceMesh.geometry.attributes.position,
@@ -395,7 +409,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
     }
 
     this.lastExtrusionFaceMesh = this.extrusionFaceMesh.clone();
-};
+}
 
 Beetle.prototype.makePrismMesh = function (extrusionPositions, sideCount) {
     // Make a new mesh out of all the vertex positions created by the
@@ -427,10 +441,7 @@ Beetle.prototype.makePrismMesh = function (extrusionPositions, sideCount) {
     extrusionGeometry.computeVertexNormals();
 
     this.controller.objects.add(
-        new THREE.Mesh(
-            extrusionGeometry,
-            THREE.Cache.getMaterial(this.color)
-        )
+        new THREE.Mesh(extrusionGeometry, THREE.Cache.getMaterial(this.color))
     );
     this.controller.changed();
 };
@@ -438,12 +449,14 @@ Beetle.prototype.makePrismMesh = function (extrusionPositions, sideCount) {
 // User facing methods, called from blocks
 
 Beetle.prototype.forward = function (steps) {
+    this.lastPosition = this.position.clone();
     this.translateZ(Number(steps) * this.multiplierScale);
     this.controller.changed();
     if (this.extruding) { this.extrudeToCurrentPoint(); }
 };
 
 Beetle.prototype.goto = function (x, y, z) {
+    this.lastPosition = this.position.clone();
     if (x !== '') { this.position.setZ(Number(x)); }
     if (y !== '') { this.position.setX(Number(y)); }
     if (z !== '') { this.position.setY(Number(z)); }
