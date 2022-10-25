@@ -77,6 +77,10 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
         this.originalSetColorDimension(idx, num);
         if (stage?.beetleController) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
+        } else {
+            // unload myself
+            SpriteMorph.prototype.setColorDimension =
+                this.originalSetColorDimension;
         }
     };
 
@@ -86,7 +90,11 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
         this.originalSetColor(aColor);
         if (stage?.beetleController) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
+        } else {
+            // unload myself
+            SpriteMorph.prototype.setColor = this.originalSetColor;
         }
+
     };
 
     SpriteMorph.prototype.originalSetPenDown = SpriteMorph.prototype.setPenDown;
@@ -103,14 +111,18 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
                 stage.beetleController.beetle.stopRecordingExtrusionFace();
                 stage.beetleController.changed();
             }
+        } else {
+            // unload myself
+            SpriteMorph.prototype.setPenDown = this.originalSetPenDown;
         }
+
     };
 
     SpriteMorph.prototype.originalMoveBy = SpriteMorph.prototype.moveBy;
     SpriteMorph.prototype.moveBy = function (delta, justMe) {
         var stage = this.parent;
         this.originalMoveBy(delta, justMe);
-    if (stage?.beetleController) {
+        if (stage?.beetleController) {
             if (stage.beetleController.beetle.recordingExtrusionFace) {
                 stage.beetleController.beetle.recordExtrusionFacePoint(
                     this.xPosition() / 100,
@@ -122,6 +134,9 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
                     delta.y / 100
                 );
             }
+        } else {
+            // unload myself
+            SpriteMorph.prototype.moveBy = this.originalMoveBy;
         }
     };
 }
@@ -148,6 +163,10 @@ Beetle.prototype.init = function (controller) {
     this.linewidth = 1;
     this.posAndRotStack = [];
     this.multiplierScale = 1;
+
+    // logging, for gcode exporting and maybe other features
+    this.log = [];
+    this.logging = false;
 
     this.loadMeshes();
 
@@ -241,6 +260,7 @@ Beetle.prototype.loadMeshes = function () {
 Beetle.prototype.reset = function () {
     this.position.set(0, 0, 0);
     this.rotation.set(0, 0, 0);
+    this.log = [];
 };
 
 Beetle.prototype.clear = function () {
@@ -250,10 +270,12 @@ Beetle.prototype.clear = function () {
     }
     this.controller.renderer.clear();
     this.controller.changed();
+    this.log = [];
 };
 
 Beetle.prototype.toggle = function () {
     this.shape.visible = !this.shape.visible;
+    this.extrusionFaceMesh.visible = this.shape.visible;
     this.controller.changed();
 };
 
@@ -261,6 +283,23 @@ Beetle.prototype.setColor = function (rgbString) {
     this.color = new THREE.Color(rgbString);
     this.shape.material.color = this.color;
     this.controller.changed();
+};
+
+// Logging
+
+Beetle.prototype.getLog = function () {
+    return new List(
+        this.log.map(
+            entry => new List([
+                entry[0],
+                new List([
+                    entry[1].x,
+                    entry[1].y,
+                    entry[1].z
+                ])
+            ])
+        )
+    );
 };
 
 // Extrusion support
@@ -319,13 +358,21 @@ Beetle.prototype.updateExtrusionFaceMesh = function () {
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
+    if (this.logging) { this.log.push([ 'penup', this.position ]); }
     this.lastExtrusionFaceMesh = null;
 };
 
 // Actual extrusion mesh building.
 Beetle.prototype.extrudeToCurrentPoint = function () {
+
+    if (this.logging) {
+        if (!this.extruding) { this.log.push([ 'pendown', this.position ]); }
+        this.log.push([ 'goto', this.position ]);
+    }
+
     this.extruding = true;
     this.updateMatrixWorld();
+
     if (this.extrusionFace.getPoints()[0]) {
         // if there's a base face, extrude
         this.makePrism();
@@ -664,6 +711,41 @@ BeetleController.prototype.exportSTL = function () {
     );
 };
 
+BeetleController.prototype.currentCostume = function () {
+    var wasShowingAxes = this.showAxes,
+        wasShowingBeetle = this.beetle.shape.visible,
+        wasShowingGrid = this.grid.visible,
+        canvas = newCanvas(
+            new Point(this.renderWidth, this.renderHeight),
+            true
+        ),
+        ctx = canvas.getContext('2d'),
+        costume;
+
+    if (wasShowingAxes) { this.toggleAxes(); }
+    if (wasShowingBeetle) { this.dialog.toggleBeetle(); }
+    if (wasShowingGrid) { this.dialog.toggleGrid(); }
+
+    this.renderer.setClearColor(0xFFFFFFF, 0);
+    this.render3D();
+
+    ctx.drawImage(this.renderer.domElement, 0, 0);
+    costume = new Costume(
+        canvas,
+        this.stage.newCostumeName(localize('render'))
+    );
+
+    if (wasShowingAxes) { this.toggleAxes(); }
+    if (wasShowingBeetle) { this.dialog.toggleBeetle(); }
+    if (wasShowingGrid) { this.dialog.toggleGrid(); }
+
+    this.renderer.setClearColor(0xAAAAAA, 1);
+    this.render3D();
+
+    return costume;
+};
+
+
 // BeetleGrid ///////////////////////////////////////////////////////////
 
 function BeetleGrid (controller) {
@@ -905,13 +987,27 @@ BeetleDialogMorph.prototype.close = function () {
 
 // SnapExtensions API ////////////////////////////////////////////////////
 
-SnapExtensions.primitives.set('bb_open()', function () {
-    var stage = this.parentThatIsA(StageMorph);
-    if (!stage.beetleController) {
-        stage.beetleController = new BeetleController(stage);
+// Buttons
+
+SnapExtensions.buttons.palette.push({
+    category: '3D Beetle',
+    label: 'Open 3D Window',
+    hideable: false,
+    action: function () {
+        var stage = this.parentThatIsA(StageMorph);
+        if (!stage.beetleController) {
+            stage.beetleController = new BeetleController(stage);
+        }
+        stage.beetleController.open();
     }
-    stage.beetleController.open();
 });
+
+// Redo palette so the button actually shows up
+
+world.children[0].flushBlocksCache();
+world.children[0].refreshPalette();
+
+// Primitives
 
 SnapExtensions.primitives.set('bb_clear()', function (steps) {
     var stage = this.parentThatIsA(StageMorph);
@@ -983,4 +1079,22 @@ SnapExtensions.primitives.set('bb_scale()', function () {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
     return stage.beetleController.beetle.multiplierScale;
+});
+
+SnapExtensions.primitives.set('bb_costume()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.currentCostume();
+});
+
+SnapExtensions.primitives.set('bb_setlog(bool)', function (bool) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.logging = bool;
+});
+
+SnapExtensions.primitives.set('bb_log()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.getLog();
 });
