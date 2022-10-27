@@ -75,12 +75,10 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.setColorDimension = function (idx, num) {
         var stage = this.parent;
         this.originalSetColorDimension(idx, num);
-        if (stage?.beetleController) {
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
-        } else {
-            // unload myself
-            SpriteMorph.prototype.setColorDimension =
-                this.originalSetColorDimension;
         }
     };
 
@@ -88,55 +86,59 @@ if (!SpriteMorph.prototype.originalSetColorDimension) {
     SpriteMorph.prototype.setColor = function (aColor) {
         var stage = this.parent;
         this.originalSetColor(aColor);
-        if (stage?.beetleController) {
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
             stage.beetleController.beetle.setColor(this.color.toRGBstring());
-        } else {
-            // unload myself
-            SpriteMorph.prototype.setColor = this.originalSetColor;
         }
-
     };
 
     SpriteMorph.prototype.originalSetPenDown = SpriteMorph.prototype.setPenDown;
     SpriteMorph.prototype.setPenDown = function (bool, noShadow) {
         var stage = this.parent;
         this.originalSetPenDown(bool, noShadow);
-        if (stage?.beetleController) {
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
             if (bool) {
-                stage.beetleController.beetle.startRecordingExtrusionFace(
-                    this.xPosition() / 100,
-                    this.yPosition() / 100
-                );
+                if (stage.beetleController.beetle.recordingExtrusionFace) {
+                    stage.beetleController.beetle.recordExtrusionFacePoint(
+                        this.xPosition() / 100,
+                        this.yPosition() / 100
+                    );
+                } else {
+                    stage.beetleController.beetle.startRecordingExtrusionFace(
+                        this.xPosition() / 100,
+                        this.yPosition() / 100
+                    );
+                }
             } else {
                 stage.beetleController.beetle.stopRecordingExtrusionFace();
                 stage.beetleController.changed();
             }
-        } else {
-            // unload myself
-            SpriteMorph.prototype.setPenDown = this.originalSetPenDown;
         }
-
     };
 
     SpriteMorph.prototype.originalMoveBy = SpriteMorph.prototype.moveBy;
     SpriteMorph.prototype.moveBy = function (delta, justMe) {
         var stage = this.parent;
         this.originalMoveBy(delta, justMe);
-        if (stage?.beetleController) {
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
             if (stage.beetleController.beetle.recordingExtrusionFace) {
-                stage.beetleController.beetle.recordExtrusionFacePoint(
-                    this.xPosition() / 100,
-                    this.yPosition() / 100
-                );
+                if (this.isDown) {
+                    stage.beetleController.beetle.recordExtrusionFacePoint(
+                        this.xPosition() / 100,
+                        this.yPosition() / 100
+                    );
+                }
             } else if (stage.beetleController.beetle.extrusionFace) {
                 stage.beetleController.beetle.translateExtrusionFaceMeshBy(
                     delta.x / 100,
                     delta.y / 100
                 );
             }
-        } else {
-            // unload myself
-            SpriteMorph.prototype.moveBy = this.originalMoveBy;
         }
     };
 }
