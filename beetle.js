@@ -558,8 +558,8 @@ BeetleController.prototype.init = function (stage) {
 
     this.objects = new THREE.Object3D();
 
-    this.renderWidth = 480 * devicePixelRatio;
-    this.renderHeight = 360 * devicePixelRatio;
+    this.renderWidth = 480;
+    this.renderHeight = 360;
 
     this.initRenderer();
     this.initScene();
@@ -590,7 +590,7 @@ BeetleController.prototype.renderExtent = function () {
 BeetleController.prototype.initRenderer = function () {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(this.renderWidth, this.renderHeight);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.setPixelRatio(devicePixelRatio);
     this.renderer.setClearColor(0xAAAAAA, 1);
     this.renderer.shouldRerender = false;
 };
@@ -686,7 +686,7 @@ BeetleController.prototype.toggleAxes = function () {
 BeetleController.prototype.initOrbitControlsDiv = function () {
     this.orbitControlsDiv = document.createElement('div');
     this.orbitControlsDiv.style.width = this.renderWidth + 'px';
-    this.orbitControlsDiv.style.height = this.renderHeight + 'px';
+    this.orbitControlsDiv.style.height = this.renderHeight + '360px';
     this.orbitControlsDiv.style.visibility = 'hidden';
     document.body.append(this.orbitControlsDiv);
 };
