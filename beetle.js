@@ -8,7 +8,7 @@
 
 // TODO change when deploying
 // monkey-patch load to prepend asset URL
-THREE.BaseURL = 'http://localhost:8000/'
+THREE.BaseURL = 'https://localhost:8000/'
 
 THREE.OBJLoader.prototype.originalLoad = THREE.OBJLoader.prototype.load;
 THREE.OBJLoader.prototype.load = function (path, callback) {
@@ -900,6 +900,8 @@ BeetleDialogMorph.prototype.initControls = function () {
                 controller.camera,
                 controller.orbitControlsDiv
             );
+    controls.panSpeed = 1000;
+    controls.rotateSpeed = 1000;
 
     controller.controls = controls;
 
