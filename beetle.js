@@ -563,6 +563,8 @@ BeetleController.prototype.init = function (stage) {
     this.renderWidth = 480;
     this.renderHeight = 360;
 
+    this.ghostMode = false;
+
     this.initRenderer();
     this.initScene();
     this.initCamera();
@@ -751,6 +753,21 @@ BeetleController.prototype.currentCostume = function () {
     return costume;
 };
 
+BeetleController.prototype.toggleGhostMode = function () {
+    this.ghostMode = !this.ghostMode;
+    if (this.ghostMode) {
+        this.objects.children.forEach(object => {
+            object.material.opacity = 0.25;
+            object.material.transparent = true;
+        });
+    } else {
+        this.objects.children.forEach(object => {
+            object.material.opacity = 1;
+            object.material.transparent = false;
+        });
+    }
+    this.changed();
+};
 
 // BeetleGrid ///////////////////////////////////////////////////////////
 
@@ -819,10 +836,11 @@ BeetleDialogMorph.prototype.init = function (controller, onAccept) {
     this.onaccept = onAccept;
 
     this.initRenderView();
-    this.initControls();
+    this.initControlPanel();
+    this.initMouseControls();
 
     BeetleDialogMorph.uber.init.call(this);
-    this.labelString = '3D Rendering';
+    this.labelString = '3D Beetle';
     this.createLabel();
     this.buildContents();
 
@@ -831,16 +849,14 @@ BeetleDialogMorph.prototype.init = function (controller, onAccept) {
 };
 
 BeetleDialogMorph.prototype.buildContents = function () {
-    this.addBody(new AlignmentMorph('column', this.padding / 2));
+    this.addBody(new AlignmentMorph('column', this.padding * 2));
     this.body.add(this.renderView);
+    this.body.add(this.controlPanel);
+    this.controlPanel.fixLayout();
     this.body.fixLayout();
 
-    this.addButton('ok', 'Close');
-    this.addButton('resetCamera', 'Recenter');
-    this.addButton('toggleGrid', 'Grid');
-    this.addButton('toggleAxes', 'Axes');
-    this.addButton('toggleBeetle', 'Beetle');
     this.addButton('exportSTL', 'Export');
+    this.addButton('ok', 'Close');
 
     this.fixLayout();
     this.controller.changed();
@@ -881,27 +897,115 @@ BeetleDialogMorph.prototype.initRenderView = function () {
     };
 };
 
-BeetleDialogMorph.prototype.initControls = function () {
+BeetleDialogMorph.prototype.initControlPanel = function () {
+    var columns = [
+        [
+            {
+                label: 'Beetle',
+                type: 'toggle',
+                action: 'toggleBeetle',
+                query: 'beetleEnabled'
+            },
+            {
+                label: 'Grid',
+                type: 'toggle',
+                action: 'toggleGrid',
+                query: 'gridEnabled'
+            },
+            {
+                label: 'Axes',
+                type: 'toggle',
+                action: 'toggleAxes',
+                query: 'axesEnabled'
+            }
+        ],
+        [
+            {
+                label: 'Wireframe',
+                type: 'toggle',
+                action: 'toggleWireframe',
+                query: 'wireframeEnabled'
+            },
+            {
+                label: 'Ghost mode',
+                type: 'toggle',
+                action: 'toggleGhostMode',
+                query: 'ghostModeEnabled'
+            }
+        ],
+        [
+            {
+                label: 'Zoom to fit',
+                type: 'button',
+                action: 'zoomToFit'
+            },
+            {
+                label: 'Reset Camera',
+                type: 'button',
+                action: 'resetCamera'
+            }
+        ]
+    ];
+
+    this.controlPanel = new AlignmentMorph('row', this.padding * 4);
+
+    columns.forEach(column => {
+        var columnMorph = new AlignmentMorph('column', this.padding / 2);
+        columnMorph.alignment = 'left';
+        this.controlPanel.add(columnMorph);
+        column.forEach(item => {
+            if (item.type === 'button') {
+                columnMorph.add(
+                    new PushButtonMorph(this, item.action, item.label)
+                );
+            } else if (item.type === 'toggle') {
+                columnMorph.add(
+                    new ToggleMorph(
+                        'checkbox',
+                        this,
+                        item.action,
+                        item.label,
+                        item.query
+                    )
+                );
+            }
+
+        });
+    });
+
+    this.controlPanel.fixLayout = function () {
+        var myself = this;
+        AlignmentMorph.prototype.fixLayout.call(this);
+        this.children.forEach(child => {
+            child.setTop(myself.top);
+            child.fixLayout();
+        });
+    };
+};
+
+BeetleDialogMorph.prototype.initMouseControls = function () {
     // Get rid of old controls if there were any. They would interfere with the
     // new ones and make the camera behave in the weirdest way.
-    if (this.controller.controls) { this.controller.controls.dispose(); }
+    if (this.controller.mouseControls) {
+        this.controller.mouseControls.dispose();
+    }
 
     var controller = this.controller,
-        controls =
+        mouseControls =
             new THREE.OrbitControls(
                 controller.camera,
                 controller.orbitControlsDiv
             );
-    controls.panSpeed = 1;
-    controls.rotateSpeed = 1;
+    mouseControls.panSpeed = 1;
+    mouseControls.rotateSpeed = 1;
 
-    controller.controls = controls;
+    controller.mouseControls = mouseControls;
 
     this.renderView.mouseScroll = function (y, x) {
         var e = new Event('wheel');
         e.deltaY = y * -1;
         controller.orbitControlsDiv.dispatchEvent(e);
-        controls.update();
+        mouseControls.update();
         controller.changed();
     };
     
@@ -912,7 +1016,7 @@ BeetleDialogMorph.prototype.initControls = function () {
         e.pageX = pos.x;
         e.pageY = pos.y;
         controller.orbitControlsDiv.dispatchEvent(e);
-        controls.update();
+        mouseControls.update();
         controller.changed();
     };
 
@@ -951,24 +1055,48 @@ BeetleDialogMorph.prototype.initControls = function () {
         controller.orbitControlsDiv.dispatchEvent(e);
     }; 
 
-    controls.update();
+    mouseControls.update();
 };
 
 BeetleDialogMorph.prototype.resetCamera = function () {
     this.controller.camera.reset();
-    this.initControls();
+    this.initMouseControls();
 };
 
 BeetleDialogMorph.prototype.toggleGrid = function () {
     this.controller.grid.toggle();
 };
 
+BeetleDialogMorph.prototype.gridEnabled = function () {
+    return this.controller.grid.visible;
+};
+
 BeetleDialogMorph.prototype.toggleAxes = function () {
     this.controller.toggleAxes();
 };
 
+BeetleDialogMorph.prototype.axesEnabled = function () {
+    return this.controller.showAxes;
+};
+
 BeetleDialogMorph.prototype.toggleBeetle = function () {
     this.controller.beetle.toggle();
+};
+
+BeetleDialogMorph.prototype.beetleEnabled = function () {
+    return this.controller.beetle.shape.visible;
+};
+
+// TODO
+BeetleDialogMorph.prototype.toggleWireframe = function () {};
+BeetleDialogMorph.prototype.wireframeEnabled = function () {return false};
+
+BeetleDialogMorph.prototype.toggleGhostMode = function () {
+    this.controller.toggleGhostMode();
+};
+
+BeetleDialogMorph.prototype.ghostModeEnabled = function () {
+    return this.controller.ghostMode;
 };
 
 BeetleDialogMorph.prototype.exportSTL = function () {
