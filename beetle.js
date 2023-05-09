@@ -592,6 +592,7 @@ BeetleController.prototype.renderExtent = function () {
 BeetleController.prototype.initRenderer = function () {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(devicePixelRatio);
+    this.renderer.domElement.isRetinaEnabled = false;
     this.renderer.setSize(this.renderWidth, this.renderHeight);
     this.renderer.setClearColor(0xAAAAAA, 1);
     this.renderer.shouldRerender = false;
