@@ -591,8 +591,8 @@ BeetleController.prototype.renderExtent = function () {
 
 BeetleController.prototype.initRenderer = function () {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(this.renderWidth, this.renderHeight);
     this.renderer.setPixelRatio(devicePixelRatio);
+    this.renderer.setSize(this.renderWidth, this.renderHeight);
     this.renderer.setClearColor(0xAAAAAA, 1);
     this.renderer.shouldRerender = false;
 };
@@ -688,7 +688,7 @@ BeetleController.prototype.toggleAxes = function () {
 BeetleController.prototype.initOrbitControlsDiv = function () {
     this.orbitControlsDiv = document.createElement('div');
     this.orbitControlsDiv.style.width = this.renderWidth + 'px';
-    this.orbitControlsDiv.style.height = this.renderHeight + '360px';
+    this.orbitControlsDiv.style.height = this.renderHeight + 'px';
     this.orbitControlsDiv.style.visibility = 'hidden';
     document.body.append(this.orbitControlsDiv);
 };
@@ -852,33 +852,24 @@ BeetleDialogMorph.prototype.initRenderView = function () {
     this.renderView.setExtent(controller.renderExtent());
 
     this.renderView.drawOn = function (ctx, rect) {
-        var clipped = rect.intersect(this.bounds),
-            pos = this.position(),
-            pic = controller.renderer.domElement,
-            src, w, h, sl, st;
+        var pic = controller.renderer.domElement;
 
-        if (!clipped.extent().gt(ZERO)) {return; }
+        window.ctx = ctx;
 
         ctx.save();
-
-        src = clipped.translateBy(pos.neg());
-        sl = src.left();
-        st = src.top();
-        w = Math.min(src.width(), pic.width - sl);
-        h = Math.min(src.height(), pic.height - st);
-        if (w < 1 || h < 1) {return; }
         ctx.drawImage(
             pic,
-            sl,
-            st,
-            w,
-            h,
-            clipped.left(),
-            clipped.top(),
-            w,
-            h
+            0,
+            0,
+            controller.renderWidth * devicePixelRatio,
+            controller.renderHeight * devicePixelRatio,
+            this.left(),
+            this.top(),
+            controller.renderWidth,
+            controller.renderHeight
         );
         ctx.restore();
+
     };
 
     this.renderView.step = function () {
@@ -900,8 +891,8 @@ BeetleDialogMorph.prototype.initControls = function () {
                 controller.camera,
                 controller.orbitControlsDiv
             );
-    controls.panSpeed = 1000;
-    controls.rotateSpeed = 1000;
+    controls.panSpeed = 1;
+    controls.rotateSpeed = 1;
 
     controller.controls = controls;
 
