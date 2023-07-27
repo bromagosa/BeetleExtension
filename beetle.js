@@ -20,6 +20,12 @@ THREE.TextureLoader.prototype.load = function (path, callback) {
     return this.originalLoad(THREE.BaseURL + 'img/' + path, callback);
 };
 
+THREE.Object3D.prototype.boundingSphere = function () {
+    var boxHelper = new THREE.BoxHelper(this, 0xffff00);
+    boxHelper.geometry.computeBoundingSphere();
+    return boxHelper.geometry.boundingSphere;
+};
+
 THREE.Object3D.prototype.addLineToPointWithColor = function
     (point, color, thickness)
 {
@@ -175,7 +181,7 @@ Beetle.prototype.init = function (controller) {
     // extrusion
     this.extruding = false;
     this.recordingExtrusionFace = false;
-    this.extrusionFace = new THREE.Shape();
+    this.extrusionFace = this.defaultExtrusionFace();
     this.lastExtrusionFaceMesh = null;
     this.lastPosition = new THREE.Vector3();
     this.updateExtrusionFaceMesh();
@@ -343,6 +349,12 @@ Beetle.prototype.translateExtrusionFaceMeshBy = function (x, y) {
     }
 };
 
+Beetle.prototype.defaultExtrusionFace = function () {
+    var points = [
+        [0.196,-0.034],[0.187,-0.068],[0.173,-0.099],[0.153,-0.128], [0.128,-0.153],[0.099,-0.173],[0.068,-0.187],[0.034,-0.196],[0,-0.2],[-0.034,-0.196],[-0.068,-0.187],[-0.099,-0.173],[-0.128,-0.153],[-0.153,-0.128],[-0.173,-0.099],[-0.187,-0.068],[-0.196,-0.034],[-0.2,0],[-0.196,0.034],[-0.187,0.068],[-0.173,0.099],[-0.153,0.128],[-0.128,0.153],[-0.099,0.173],[-0.068,0.187],[-0.034,0.196],[0,0.2],[0.034,0.196],[0.068,0.187],[0.099,0.173],[0.128,0.153],[0.153,0.128],[0.173,0.099],[0.187,0.068],[0.196,0.034],[0.2,0]];
+    return new THREE.Shape(points.map(p => new THREE.Vector3(p[0], p[1], 0)));
+};
+
 Beetle.prototype.updateExtrusionFaceMesh = function () {
     this.remove(this.extrusionFaceMesh);
     this.extrusionFaceMesh = new THREE.Mesh(
@@ -465,7 +477,6 @@ Beetle.prototype.makePrismMesh = function (extrusionPositions, sideCount) {
     var extrusionGeometry = new THREE.BufferGeometry(),
         baseIndex = this.extrusionFaceMesh.geometry.index.array,
         index = [],
-        normals = [],
         offset;
 
     extrusionGeometry.setAttribute(
@@ -564,6 +575,7 @@ BeetleController.prototype.init = function (stage) {
     this.renderHeight = 360;
 
     this.ghostMode = false;
+    this.wireframeEnabled = false;
 
     this.initRenderer();
     this.initScene();
@@ -611,7 +623,6 @@ BeetleController.prototype.initLights = function () {
 };
 
 BeetleController.prototype.initCamera = function () {
-    var myself = this;
 
     if (this.scene.camera) { this.scene.remove(this.camera) };
 
@@ -620,13 +631,30 @@ BeetleController.prototype.initCamera = function () {
         this.renderWidth / this.renderHeight
     );
 
-    this.camera.reset = function () {
-        this.position.set(-5, 7, 5);
-        this.lookAt(0, 0, 0);
-        myself.changed();
-    };
+    this.camera.controller = this;
 
     this.scene.add(this.camera);
+};
+
+THREE.PerspectiveCamera.prototype.reset = function () {
+    this.position.set(-5, 7, 5);
+    this.lookAt(0, 0, 0);
+    this.controller.changed();
+};
+
+THREE.PerspectiveCamera.prototype.zoomToFit = function () {
+    var boundingSphere = this.controller.objects.boundingSphere(),
+        center = boundingSphere.center,
+        distance = boundingSphere.radius;
+
+    this.lookAt(center);
+    this.position.setX(center.x);
+    this.position.setY(center.y);
+    this.position.setZ(center.z);
+    this.lookAt(center);
+    this.translateZ(distance);
+
+    this.controller.changed();
 };
 
 BeetleController.prototype.initScene = function () {
@@ -764,6 +792,20 @@ BeetleController.prototype.toggleGhostMode = function () {
         this.objects.children.forEach(object => {
             object.material.opacity = 1;
             object.material.transparent = false;
+        });
+    }
+    this.changed();
+};
+
+BeetleController.prototype.toggleWireframe = function () {
+    this.wireframeEnabled = !this.wireframeEnabled;
+    if (this.wireframeEnabled) {
+        this.objects.children.forEach(object => {
+            object.material.wireframe = true;
+        });
+    } else {
+        this.objects.children.forEach(object => {
+            object.material.wireframe = false;
         });
     }
     this.changed();
@@ -1063,6 +1105,11 @@ BeetleDialogMorph.prototype.resetCamera = function () {
     this.initMouseControls();
 };
 
+BeetleDialogMorph.prototype.zoomToFit = function () {
+    this.controller.camera.zoomToFit();
+    this.initMouseControls();
+};
+
 BeetleDialogMorph.prototype.toggleGrid = function () {
     this.controller.grid.toggle();
 };
@@ -1087,9 +1134,13 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
     return this.controller.beetle.shape.visible;
 };
 
-// TODO
-BeetleDialogMorph.prototype.toggleWireframe = function () {};
-BeetleDialogMorph.prototype.wireframeEnabled = function () {return false};
+BeetleDialogMorph.prototype.toggleWireframe = function () {
+    this.controller.toggleWireframe();
+};
+
+BeetleDialogMorph.prototype.wireframeEnabled = function () {
+    return this.controller.wireframeEnabled;
+};
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.toggleGhostMode();
