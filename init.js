@@ -1,4 +1,5 @@
-var baseUrl = 'https://localhost:8000/'; // change when deploying
+var deploy = false,
+    baseUrl = deploy ? './' : 'https://localhost:8000/';
 
 function loadSrc (url) {
     var url = baseUrl + url;
@@ -16,9 +17,7 @@ function loadSrc (url) {
     });
 };
 
-loadSrc('three.min.js').then(
-    ()=> loadSrc('OBJLoader.js')).then(
-    ()=> loadSrc('STLExporter.js')).then(
-    ()=> loadSrc('OrbitControls.js')).then(
-    ()=> loadSrc('beetle.js')
-);
+loadSrc('babylon.js')
+    .then(()=> loadSrc('babylonjs.loaders.min.js'))
+    .then(()=> loadSrc('babylon.gridMaterial.min.js'))
+    .then(()=> loadSrc('beetle.js'));
