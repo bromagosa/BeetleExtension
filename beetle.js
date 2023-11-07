@@ -3,6 +3,36 @@
 // ---------------------------------------------
 // 🄯 Bernat Romagosa i Carrasquer, September 2023
 
+// Snap! Additions ///////////////////////////////////////////////////////
+
+// Unfortunately, there are some things I can't do without monkey-patching
+// a few Snap! methods. I'm trying to keep them to a bare minimum.
+
+if (!SpriteMorph.prototype.originalSetColorDimension) {
+    SpriteMorph.prototype.originalSetColorDimension =
+        SpriteMorph.prototype.setColorDimension;
+    SpriteMorph.prototype.setColorDimension = function (idx, num) {
+        var stage = this.parent;
+        this.originalSetColorDimension(idx, num);
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
+            stage.beetleController.beetle.setColor(this.color);
+        }
+    };
+
+    SpriteMorph.prototype.originalSetColor = SpriteMorph.prototype.setColor;
+    SpriteMorph.prototype.setColor = function (aColor) {
+        var stage = this.parent;
+        this.originalSetColor(aColor);
+        if (stage?.beetleController &&
+            this.parentThatIsA(IDE_Morph).currentSprite === this
+        ) {
+            stage.beetleController.beetle.setColor(this.color);
+        }
+    };
+}
+
 // BeetleController //////////////////////////////////////////////////////
 
 function BeetleController (stage) {
@@ -75,6 +105,7 @@ BeetleController.prototype.initScene = function () {
 BeetleController.prototype.initCamera = function () {
     this.camera = new BABYLON.ArcRotateCamera(
         'beetleCam', 0, 0, 10, new BABYLON.Vector3(0, 5, -10), this.scene);
+    this.camera.lowerRadiusLimit = 1.5;
     this.camera.reset();
 };
 
@@ -82,6 +113,7 @@ BABYLON.ArcRotateCamera.prototype.reset = function () {
     this.radius = 10;
     this.setTarget(BABYLON.Vector3.Zero());
     this.setPosition(new BABYLON.Vector3(0, 5, -10));
+    this.alpha = Math.PI / 4;
 };
 
 BABYLON.ArcRotateCamera.prototype.isMoving = function () {
@@ -406,15 +438,13 @@ Beetle.prototype.init = function (controller) {
     this.posAndRotStack = [];
     this.multiplierScale = 1;
 
-    this.axes = [];
-
     // logging, for gcode exporting and maybe other features
     this.log = [];
     this.logging = false;
 
-    this.meshes = [];
     this.loadMeshes();
     this.wings = null;
+    this.body = new BABYLON.TransformNode('body', this.controller.scene);
 
     // extrusion
     this.extruding = false;
@@ -429,23 +459,32 @@ Beetle.prototype.init = function (controller) {
     this.controller.changed();
 };
 
-Beetle.prototype.reset = function () {};
-
 Beetle.prototype.initAxes = function () {
-    // doesn't matter which mesh we attach them to, as they're all
-    // centered at 0,0
-    this.controller.gizmoManager.attachableMeshes = [ this.meshes[0] ];
-    this.controller.gizmoManager.attachToMesh(this.meshes[0]);
+    this.controller.gizmoManager.attachableMeshes = [ this.body ];
+    this.controller.gizmoManager.attachToMesh(this.body);
 };
 
-Beetle.prototype.initWings = function () {
-    this.wings = this.meshes.find(mesh => mesh.name === 'Body');
+Beetle.prototype.initColor = function () {
+    // Find out if there's a current sprite, or any sprite at all
+    var sprite = this.controller.stage.parent.currentSprite,
+        color;
+    if (sprite instanceof StageMorph) {
+        if (sprite.children[0]) {
+            sprite = sprite.children[0];
+        } else {
+            return;
+        }
+    }
+    this.setColor(sprite.color);
 };
 
 Beetle.prototype.setColor = function (color) {
-    if (!this.wings) { this.initWings(); }
-    this.wings.diffuseColor =
-        new BABYLON.Color3(color.r, color.g, color.b);
+    if (!this.wings) {
+        this.wings =
+            this.body.getChildren().find(mesh => mesh.name === 'Wings');
+    }
+    this.wings.material.diffuseColor =
+        new BABYLON.Color3(color.r / 255, color.g / 255, color.b / 255);
     this.controller.changed();
 };
 
@@ -456,20 +495,23 @@ Beetle.prototype.loadMeshes = function () {
                 '',
                 baseUrl + 'meshes/',
                 'beetle-' + each + '.obj',
-                this.scene,
-                (meshes) => {
-                    this.meshes.push(...meshes);
+                this.controller.scene,
+                meshes => {
+                    meshes.forEach(mesh => mesh.parent = this.body);
                     if (each === 'black') {
                         this.initAxes();
                         this.controller.changed();
+                        this.initColor();
                     } else {
                         meshes.forEach(
-                            mesh =>
+                            mesh => {
                                 mesh.material =
                                     new BABYLON.StandardMaterial(
                                         each,
-                                        this.scene
-                                    )
+                                        this.controller.scene
+                                    );
+                                mesh.material.diffuseColor.set(.5,.5,.5);
+                            }
                         );
                     }
                 }
@@ -481,16 +523,92 @@ Beetle.prototype.defaultExtrusionFace = function () {};
 Beetle.prototype.updateExtrusionFaceMesh = function () {};
 
 Beetle.prototype.show = function () {
-    this.meshes.forEach(mesh => mesh.visibility = 1);
+    this.body.getChildren().forEach(mesh => mesh.visibility = 1);
 };
 
 Beetle.prototype.hide = function () {
-    this.meshes.forEach(mesh => mesh.visibility = 0);
+    this.body.getChildren().forEach(mesh => mesh.visibility = 0);
 };
 
 Beetle.prototype.isVisible = function () {
-    return this.meshes[0] ? this.meshes[0].visibility === 1 : true;
+    return this.body.getChildren()[0] ?
+        this.body.getChildren()[0].visibility === 1 :
+        true;
 };
+
+// User facing methods, called from blocks
+
+Beetle.prototype.reset = function () {};
+
+Beetle.prototype.clear = function () {}; // shouldn't it be a controller method?
+
+Beetle.prototype.forward = function (steps) {
+    this.lastPosition = this.body.position.clone();
+    this.body.locallyTranslate(
+        new BABYLON.Vector3(0, 0, Number(steps) * this.multiplierScale)
+    );
+    this.controller.changed();
+    if (this.extruding) { this.extrudeToCurrentPoint(); }
+};
+
+Beetle.prototype.goto = function (x, y, z) {
+    this.lastPosition = this.body.position.clone();
+    if (x !== '') { this.body.position.z = Number(x); }
+    if (y !== '') { this.body.position.x = Number(y); }
+    if (z !== '') { this.body.position.y = Number(z); }
+    this.controller.changed();
+    if (this.extruding) { this.extrudeToCurrentPoint(); }
+};
+
+Beetle.prototype.getPosition = function () {
+    return new List([
+        this.body.position.z,
+        this.body.position.x,
+        this.body.position.y
+    ]);
+};
+
+Beetle.prototype.setRotations = function (x, y, z) {
+    // FIXME this stops working after using rotate
+    if (x !== '') { this.body.rotation.z = radians(Number(x)); }
+    if (y !== '') { this.body.rotation.x = radians(Number(y) * -1); }
+    if (z !== '') { this.body.rotation.y = radians(Number(z) * -1); }
+    this.controller.changed();
+};
+
+Beetle.prototype.getRotation = function () {
+    // FIXME this stops working after using rotate
+    return new List([
+        degrees(this.body.rotation.z),
+        degrees(this.body.rotation.x * -1),
+        degrees(this.body.rotation.y * -1)
+    ]);
+};
+
+Beetle.prototype.rotate = function (x, y, z) {
+    // FIXME this stops working after using setRotations
+    if (x !== '') {
+        this.body.rotate(new BABYLON.Vector3(0,0,1), radians(Number(x)));
+    }
+    if (y !== '') {
+        this.body.rotate(new BABYLON.Vector3(1,0,0), radians(Number(y)) * -1);
+    }
+    if (z !== '') {
+        this.body.rotate(new BABYLON.Vector3(0,1,0), radians(Number(z)) * -1);
+    }
+    this.controller.changed();
+};
+
+Beetle.prototype.pointTo = function (x, y, z) {
+    this.body.lookAt(new BABYLON.Vector3(Number(z), Number(x), Number(y)));
+    this.controller.changed();
+};
+
+Beetle.prototype.extrudeToCurrentPoint = function () {};
+Beetle.prototype.stopExtruding = function () {};
+Beetle.prototype.setScale = function (scale) {};
+Beetle.prototype.currentCostume = function () {};
+Beetle.prototype.getLog = function () {};
 
 // SnapExtensions API ////////////////////////////////////////////////////
 
@@ -513,3 +631,95 @@ SnapExtensions.buttons.palette.push({
 
 world.children[0].flushBlocksCache();
 world.children[0].refreshPalette();
+
+// Primitives
+
+SnapExtensions.primitives.set('bb_clear()', function (steps) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.clear();
+});
+
+SnapExtensions.primitives.set('bb_forward(steps)', function (steps) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.forward(steps);
+});
+
+SnapExtensions.primitives.set('bb_goto(x, y, z)', function (x, y, z) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.goto(x, y, z);
+});
+
+SnapExtensions.primitives.set('bb_position()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.getPosition();
+});
+
+SnapExtensions.primitives.set('bb_setrot(x, y, z)', function (x, y, z) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.setRotations(x, y, z);
+});
+
+SnapExtensions.primitives.set('bb_rotation()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.getRotation();
+});
+
+SnapExtensions.primitives.set('bb_rotate(x, y, z)', function (x, y, z) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.rotate(x, y, z);
+});
+
+SnapExtensions.primitives.set('bb_pointto(x, y, z)', function (x, y, z) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.pointTo(x, y, z);
+});
+
+SnapExtensions.primitives.set('bb_startextruding()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.extrudeToCurrentPoint();
+});
+
+SnapExtensions.primitives.set('bb_stopextruding()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.stopExtruding();
+});
+
+SnapExtensions.primitives.set('bb_setscale(scale)', function (scale) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.setScale(scale);
+});
+
+SnapExtensions.primitives.set('bb_scale()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.multiplierScale;
+});
+
+SnapExtensions.primitives.set('bb_costume()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.currentCostume();
+});
+
+SnapExtensions.primitives.set('bb_setlog(bool)', function (bool) {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    stage.beetleController.beetle.logging = bool;
+});
+
+SnapExtensions.primitives.set('bb_log()', function () {
+    var stage = this.parentThatIsA(StageMorph);
+    if (!stage.beetleController) { return; }
+    return stage.beetleController.beetle.getLog();
+});
