@@ -60,7 +60,6 @@ BeetleController.prototype.init = function (stage) {
     this.initCamera();
     this.initLights();
     this.initGrid();
-    this.initGizmoManager();
 
     this.beetle = new Beetle(this);
 };
@@ -160,13 +159,13 @@ BeetleController.prototype.initGrid = function () {
     gridMaterial.lineColor = new BABYLON.Color3(1.0, 1.0, 1.0);
     gridMaterial.opacity = 0.98;
     this.grid = BABYLON.Mesh.CreatePlane('plane', 100, this.scene);
-    this.grid.rotation.x = Math.PI / 2;
+    this.grid.rotation.x = Math.PI / -2;
     this.grid.material = gridMaterial;
-};
 
-BeetleController.prototype.initGizmoManager = function () {
     this.gizmoManager = new BABYLON.GizmoManager(this.scene);
     this.gizmoManager.positionGizmoEnabled = true;
+    this.gizmoManager.attachableMeshes = [this.grid];
+    this.gizmoManager.attachToMesh(this.grid);
 };
 
 BeetleController.prototype.changed = function () {
@@ -460,8 +459,10 @@ Beetle.prototype.init = function (controller) {
 };
 
 Beetle.prototype.initAxes = function () {
-    this.controller.gizmoManager.attachableMeshes = [ this.body ];
-    this.controller.gizmoManager.attachToMesh(this.body);
+    this.gizmoManager = new BABYLON.GizmoManager(this.controller.scene);
+    this.gizmoManager.positionGizmoEnabled = true;
+    this.gizmoManager.attachableMeshes = [this.body];
+    this.gizmoManager.attachToMesh(this.body);
 };
 
 Beetle.prototype.initColor = function () {
@@ -569,32 +570,32 @@ Beetle.prototype.getPosition = function () {
 };
 
 Beetle.prototype.setRotations = function (x, y, z) {
-    // FIXME this stops working after using rotate
+    this.body.rotationQuaternion = null;
     if (x !== '') { this.body.rotation.z = radians(Number(x)); }
     if (y !== '') { this.body.rotation.x = radians(Number(y) * -1); }
     if (z !== '') { this.body.rotation.y = radians(Number(z) * -1); }
+    this.body.rotationQuaternion = this.body.rotation.toQuaternion();
     this.controller.changed();
 };
 
 Beetle.prototype.getRotation = function () {
-    // FIXME this stops working after using rotate
+    var quaternion = this.body.rotationQuaternion.toEulerAngles();
     return new List([
-        degrees(this.body.rotation.z),
-        degrees(this.body.rotation.x * -1),
-        degrees(this.body.rotation.y * -1)
+        degrees(quaternion.z),
+        degrees(quaternion.x * -1),
+        degrees(quaternion.y * -1)
     ]);
 };
 
 Beetle.prototype.rotate = function (x, y, z) {
-    // FIXME this stops working after using setRotations
     if (x !== '') {
-        this.body.rotate(new BABYLON.Vector3(0,0,1), radians(Number(x)));
+        this.body.rotate(BABYLON.Axis.Z, radians(Number(x)));
     }
     if (y !== '') {
-        this.body.rotate(new BABYLON.Vector3(1,0,0), radians(Number(y)) * -1);
+        this.body.rotate(BABYLON.Axis.X, radians(Number(y)) * -1);
     }
     if (z !== '') {
-        this.body.rotate(new BABYLON.Vector3(0,1,0), radians(Number(z)) * -1);
+        this.body.rotate(BABYLON.Axis.Y, radians(Number(z)) * -1);
     }
     this.controller.changed();
 };
