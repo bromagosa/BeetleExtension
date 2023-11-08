@@ -1,5 +1,5 @@
 // 3D extension for 3D rendering and fabrication
-// extensively inspired in Beetle Blocks 
+// extensively inspired in Beetle Blocks
 // ---------------------------------------------
 // 🄯 Bernat Romagosa i Carrasquer, September 2023
 
@@ -128,7 +128,7 @@ BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
 };
 
 BABYLON.ArcRotateCamera.prototype.rotateBy = function (deltaXY) {
-    if (this.clickOrigin) { 
+    if (this.clickOrigin) {
         var deltaX = deltaXY.x - this.clickOrigin.x,
             deltaY = deltaXY.y - this.clickOrigin.y;
         this.inertialAlphaOffset = deltaX * -0.0005;
@@ -159,12 +159,11 @@ BeetleController.prototype.initGrid = function () {
     gridMaterial.lineColor = new BABYLON.Color3(1.0, 1.0, 1.0);
     gridMaterial.opacity = 0.98;
 
-    this.grid =
-        BABYLON.MeshBuilder.CreateGround(
-            'grid',
-            { width: 100, height: 100 },
-            this.scene
-        );
+    this.grid = BABYLON.MeshBuilder.CreateGround(
+        'grid',
+        { width: 100, height: 100 },
+        this.scene
+    );
     this.grid.material = gridMaterial;
 
     this.gizmoManager = new BABYLON.GizmoManager(this.scene);
@@ -384,8 +383,10 @@ BeetleDialogMorph.prototype.gridEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleAxes = function () {
-    this.controller.gizmoManager.positionGizmoEnabled = 
+    this.controller.gizmoManager.positionGizmoEnabled =
         !this.controller.gizmoManager.positionGizmoEnabled;
+    this.controller.beetle.gizmoManager.positionGizmoEnabled =
+        this.controller.gizmoManager.positionGizmoEnabled;
     this.controller.changed();
 };
 
@@ -449,16 +450,15 @@ Beetle.prototype.init = function (controller) {
     this.loadMeshes();
     this.wings = null;
     this.body = new BABYLON.TransformNode('body', this.controller.scene);
+    this.initAxes();
 
     // extrusion
     this.extruding = false;
-    this.recordingExtrusionFace = false;
-    this.extrusionFace = this.defaultExtrusionFace();
-    this.lastExtrusionFaceMesh = null;
+    this.recordingExtrusionShape = false;
+    this.extrusionShape = this.defaultExtrusionShape();
+    this.updateExtrusionShapeMesh();
+    this.lastExtrusionShapeMesh = null;
     this.lastPosition = new BABYLON.Vector3();
-    this.updateExtrusionFaceMesh();
-
-    this.reset();
 
     this.controller.changed();
 };
@@ -482,15 +482,15 @@ Beetle.prototype.initColor = function () {
         }
     }
     this.setColor(sprite.color);
+    this.controller.changed();
 };
 
 Beetle.prototype.setColor = function (color) {
-    if (!this.wings) {
-        this.wings =
-            this.body.getChildren().find(mesh => mesh.name === 'Wings');
-    }
     this.wings.material.diffuseColor =
         new BABYLON.Color3(color.r / 255, color.g / 255, color.b / 255);
+
+    this.updateExtrusionShapeMeshColor();
+
     this.controller.changed();
 };
 
@@ -504,11 +504,7 @@ Beetle.prototype.loadMeshes = function () {
                 this.controller.scene,
                 meshes => {
                     meshes.forEach(mesh => mesh.parent = this.body);
-                    if (each === 'black') {
-                        this.initAxes();
-                        this.controller.changed();
-                        this.initColor();
-                    } else {
+                    if (each !== 'black') {
                         meshes.forEach(
                             mesh => {
                                 mesh.material =
@@ -520,13 +516,65 @@ Beetle.prototype.loadMeshes = function () {
                             }
                         );
                     }
+                    if (each === 'color') {
+                        this.wings = meshes[0];
+                        this.initColor();
+                    }
                 }
             )
     );
 };
 
-Beetle.prototype.defaultExtrusionFace = function () {};
-Beetle.prototype.updateExtrusionFaceMesh = function () {};
+// Extrusion support
+
+Beetle.prototype.defaultExtrusionShape = function () {
+    var path = [],
+        radius = .5;
+
+    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
+        path.push(
+            new BABYLON.Vector3(
+                radius * Math.cos(theta),
+                0,
+                radius * Math.sin(theta),
+            )
+        );
+    }
+
+    return path;
+};
+
+Beetle.prototype.updateExtrusionShapeMesh = function () {
+    if (this.extrusionShapeMesh) {
+        this.controller.scene.removeMesh(this.extrusionShapeMesh);
+    }
+
+    this.extrusionShapeMesh = BABYLON.MeshBuilder.CreatePolygon(
+        'extrusionShape',
+        {
+            shape: this.extrusionShape,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE
+        },
+        this.controller.scene
+    );
+    this.extrusionShapeMesh.parent = this.body;
+
+    this.extrusionShapeMesh.material = new BABYLON.StandardMaterial(
+        'extrusionShapeMesh',
+        this.controller.scene
+    );
+    this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / 2);
+    this.updateExtrusionShapeMeshColor();
+
+    this.controller.changed();
+};
+
+Beetle.prototype.updateExtrusionShapeMeshColor = function () {
+    if (this.extrusionShapeMesh && this.wings?.material) {
+        this.extrusionShapeMesh.material.diffuseColor =
+            this.wings.material.diffuseColor;
+    }
+}
 
 Beetle.prototype.show = function () {
     this.body.getChildren().forEach(mesh => mesh.visibility = 1);
@@ -543,8 +591,6 @@ Beetle.prototype.isVisible = function () {
 };
 
 // User facing methods, called from blocks
-
-Beetle.prototype.reset = function () {};
 
 Beetle.prototype.clear = function () {}; // shouldn't it be a controller method?
 
@@ -612,7 +658,11 @@ Beetle.prototype.pointTo = function (x, y, z) {
 
 Beetle.prototype.extrudeToCurrentPoint = function () {};
 Beetle.prototype.stopExtruding = function () {};
-Beetle.prototype.setScale = function (scale) {};
+Beetle.prototype.setScale = function (scale) {
+    this.multiplierScale = scale;
+    this.updateExtrusionShapeMesh();
+};
+
 Beetle.prototype.currentCostume = function () {};
 Beetle.prototype.getLog = function () {};
 
