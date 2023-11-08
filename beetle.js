@@ -158,8 +158,13 @@ BeetleController.prototype.initGrid = function () {
     gridMaterial.mainColor = new BABYLON.Color3(1, 1, 1);
     gridMaterial.lineColor = new BABYLON.Color3(1.0, 1.0, 1.0);
     gridMaterial.opacity = 0.98;
-    this.grid = BABYLON.Mesh.CreatePlane('plane', 100, this.scene);
-    this.grid.rotation.x = Math.PI / -2;
+
+    this.grid =
+        BABYLON.MeshBuilder.CreateGround(
+            'grid',
+            { width: 100, height: 100 },
+            this.scene
+        );
     this.grid.material = gridMaterial;
 
     this.gizmoManager = new BABYLON.GizmoManager(this.scene);
