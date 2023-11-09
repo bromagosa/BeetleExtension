@@ -150,7 +150,16 @@ BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
 
 BeetleController.prototype.initLights = function () {
     this.light = new BABYLON.HemisphericLight(
-        'ambientLight', new BABYLON.Vector3(0, 1, 0), this.scene);
+        'ambientLight',
+        new BABYLON.Vector3(0, 1, 0),
+        this.scene
+    );
+    this.camera.light = new BABYLON.PointLight(
+        'pointLight',
+        this.camera.position,
+        this.scene
+    );
+    this.camera.light.parent = this.camera;
 };
 
 BeetleController.prototype.initGrid = function () {
@@ -469,7 +478,6 @@ Beetle.prototype.init = function (controller) {
     this.name = 'beetle';
 
     this.linewidth = 1;
-    this.posAndRotStack = [];
     this.multiplierScale = 1;
 
     this.loadMeshes();
@@ -583,6 +591,7 @@ Beetle.prototype.updateExtrusionShapeMesh = function () {
         this.controller.scene
     );
     this.extrusionShapeMesh.parent = this.body;
+    this.extrusionShapeMesh.scalingDeterminant = this.multiplierScale;
     this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / 2);
     this.updateExtrusionShapeMeshColor();
 
@@ -625,12 +634,17 @@ Beetle.prototype.makePrism = function () {
                     v => new BABYLON.Vector3(v.x, v.z, 0)
                 ),
                 path: this.extrusionPoints,
+                scale: this.multiplierScale,
                 closeShape: true,
                 cap: BABYLON.Mesh.CAP_ALL
             },
             this.controller.scene
         );
         this.extrusionMesh.material = this.extrusionShapeMesh.material.clone();
+        this.extrusionMesh.material.alpha =
+            this.controller.ghostModeEnabled ? 1/3 : 1;
+        this.extrusionMesh.material.wireframe =
+            this.controller.wireframeEnabled;
         this.controller.objects.push(this.extrusionMesh);
     }
     this.controller.changed();
@@ -692,12 +706,16 @@ Beetle.prototype.setRotations = function (x, y, z) {
 };
 
 Beetle.prototype.getRotation = function () {
-    var quaternion = this.body.rotationQuaternion.toEulerAngles();
-    return new List([
-        degrees(quaternion.z),
-        degrees(quaternion.x * -1),
-        degrees(quaternion.y * -1)
-    ]);
+    if (this.body.rotationQuaternion) {
+        var rotation = this.body.rotationQuaternion.toEulerAngles();
+        return new List([
+            degrees(rotation.z),
+            degrees(rotation.x * -1),
+            degrees(rotation.y * -1)
+        ]);
+    } else {
+        return new List([0,0,0]);
+    }
 };
 
 Beetle.prototype.rotate = function (x, y, z) {
