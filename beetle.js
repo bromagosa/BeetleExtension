@@ -50,6 +50,7 @@ BeetleController.prototype.init = function (stage) {
     this.gizmoManager = null;
 
     this.ghostModeEnabled = false;
+    this.wireframeEnabled = false;
 
     this.shouldRerender = false;
 
@@ -421,9 +422,15 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleWireframe = function () {
+    this.controller.wireframeEnabled = !this.controller.wireframeEnabled;
+    this.controller.objects.forEach(object =>
+        object.material.wireframe = this.controller.wireframeEnabled
+    );
+    this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.wireframeEnabled = function () {
+    return this.controller.wireframeEnabled;
 };
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
