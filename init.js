@@ -20,4 +20,5 @@ function loadSrc (url) {
 loadSrc('babylon.js')
     .then(()=> loadSrc('babylonjs.loaders.min.js'))
     .then(()=> loadSrc('babylon.gridMaterial.min.js'))
+    .then(()=> loadSrc('earcut.min.js'))
     .then(()=> loadSrc('beetle.js'));

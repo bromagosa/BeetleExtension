@@ -49,6 +49,8 @@ BeetleController.prototype.init = function (stage) {
     this.glCanvas = null;
     this.gizmoManager = null;
 
+    this.ghostModeEnabled = false;
+
     this.shouldRerender = false;
 
     this.renderWidth = 480;
@@ -60,6 +62,8 @@ BeetleController.prototype.init = function (stage) {
     this.initCamera();
     this.initLights();
     this.initGrid();
+
+    this.objects = [];
 
     this.beetle = new Beetle(this);
 };
@@ -166,6 +170,7 @@ BeetleController.prototype.initGrid = function () {
     );
     this.grid.material = gridMaterial;
 
+    // Axes Gizmo
     this.gizmoManager = new BABYLON.GizmoManager(this.scene);
     this.gizmoManager.positionGizmoEnabled = true;
     this.gizmoManager.attachableMeshes = [this.grid];
@@ -183,6 +188,15 @@ BeetleController.prototype.render = function () {
         this.shouldRerender = false;
     }
 };
+
+// User facing methods, called from blocks
+
+BeetleController.prototype.clear = function () {
+    this.objects.forEach(object => object.dispose());
+    this.objects = [];
+    this.changed();
+};
+
 
 // BeetleDialogMorph ////////////////////////////////////////////////////
 
@@ -395,6 +409,8 @@ BeetleDialogMorph.prototype.axesEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleBeetle = function () {
+    //FIXME should toggle just the beetle, not the extrusion shape mesh
+    // I should make it so the extrusion shape mesh can also be toggled
     var beetle = this.controller.beetle;
     if (this.beetleEnabled()) { beetle.hide(); } else { beetle.show(); }
     this.controller.changed();
@@ -411,9 +427,15 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
+    this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
+    this.controller.objects.forEach(object =>
+        object.material.alpha = this.controller.ghostModeEnabled ? 1/3 : 1
+    );
+    this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.ghostModeEnabled = function () {
+    return this.controller.ghostModeEnabled;
 };
 
 BeetleDialogMorph.prototype.exportSTL = function () {
@@ -443,10 +465,6 @@ Beetle.prototype.init = function (controller) {
     this.posAndRotStack = [];
     this.multiplierScale = 1;
 
-    // logging, for gcode exporting and maybe other features
-    this.log = [];
-    this.logging = false;
-
     this.loadMeshes();
     this.wings = null;
     this.body = new BABYLON.TransformNode('body', this.controller.scene);
@@ -457,8 +475,8 @@ Beetle.prototype.init = function (controller) {
     this.recordingExtrusionShape = false;
     this.extrusionShape = this.defaultExtrusionShape();
     this.updateExtrusionShapeMesh();
-    this.lastExtrusionShapeMesh = null;
-    this.lastPosition = new BABYLON.Vector3();
+    this.extrusionMesh = null;
+    this.extrusionPoints = [];
 
     this.controller.changed();
 };
@@ -558,11 +576,6 @@ Beetle.prototype.updateExtrusionShapeMesh = function () {
         this.controller.scene
     );
     this.extrusionShapeMesh.parent = this.body;
-
-    this.extrusionShapeMesh.material = new BABYLON.StandardMaterial(
-        'extrusionShapeMesh',
-        this.controller.scene
-    );
     this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / 2);
     this.updateExtrusionShapeMeshColor();
 
@@ -571,10 +584,56 @@ Beetle.prototype.updateExtrusionShapeMesh = function () {
 
 Beetle.prototype.updateExtrusionShapeMeshColor = function () {
     if (this.extrusionShapeMesh && this.wings?.material) {
-        this.extrusionShapeMesh.material.diffuseColor =
-            this.wings.material.diffuseColor;
+        this.extrusionShapeMesh.material = this.wings.material;
     }
-}
+};
+
+Beetle.prototype.extrudeToCurrentPoint = function () {
+    this.extruding = true;
+    this.extrusionPoints.push(this.body.position.clone());
+    if (this.extrusionPoints[1]) {
+        if (this.extrusionShape) {
+            // if there is a base shape, extrude it to the current point
+            this.makePrism();
+        } else {
+            // otherwise, draw a line
+            // https://doc.babylonjs.com/features/featuresDeepDive/mesh/creation/param/lines
+        }
+    }
+};
+
+Beetle.prototype.makePrism = function () {
+    if (this.extrusionPoints[1]) {
+        if (this.extrusionMesh) {
+            // TODO investigate why updating existing mesh doesn't work!
+            this.controller.scene.removeMesh(this.extrusionMesh);
+            this.controller.objects.splice(
+                this.controller.objects.indexOf(this.extrusionMesh), 1);
+            this.extrusionMesh.dispose();
+        }
+        this.extrusionMesh = BABYLON.MeshBuilder.ExtrudeShape(
+            'extrusion',
+            {
+                shape: this.extrusionShape.map(
+                    v => new BABYLON.Vector3(v.x, v.z, 0)
+                ),
+                path: this.extrusionPoints,
+                closeShape: true,
+                cap: BABYLON.Mesh.CAP_ALL
+            },
+            this.controller.scene
+        );
+        this.extrusionMesh.material = this.extrusionShapeMesh.material.clone();
+        this.controller.objects.push(this.extrusionMesh);
+    }
+    this.controller.changed();
+};
+
+Beetle.prototype.stopExtruding = function () {
+    this.extruding = false;
+    this.extrusionPoints = [];
+    this.extrusionMesh = null;
+};
 
 Beetle.prototype.show = function () {
     this.body.getChildren().forEach(mesh => mesh.visibility = 1);
@@ -592,10 +651,7 @@ Beetle.prototype.isVisible = function () {
 
 // User facing methods, called from blocks
 
-Beetle.prototype.clear = function () {}; // shouldn't it be a controller method?
-
 Beetle.prototype.forward = function (steps) {
-    this.lastPosition = this.body.position.clone();
     this.body.locallyTranslate(
         new BABYLON.Vector3(0, 0, Number(steps) * this.multiplierScale)
     );
@@ -604,7 +660,6 @@ Beetle.prototype.forward = function (steps) {
 };
 
 Beetle.prototype.goto = function (x, y, z) {
-    this.lastPosition = this.body.position.clone();
     if (x !== '') { this.body.position.z = Number(x); }
     if (y !== '') { this.body.position.x = Number(y); }
     if (z !== '') { this.body.position.y = Number(z); }
@@ -656,15 +711,12 @@ Beetle.prototype.pointTo = function (x, y, z) {
     this.controller.changed();
 };
 
-Beetle.prototype.extrudeToCurrentPoint = function () {};
-Beetle.prototype.stopExtruding = function () {};
 Beetle.prototype.setScale = function (scale) {
     this.multiplierScale = scale;
     this.updateExtrusionShapeMesh();
 };
 
 Beetle.prototype.currentCostume = function () {};
-Beetle.prototype.getLog = function () {};
 
 // SnapExtensions API ////////////////////////////////////////////////////
 
@@ -693,7 +745,7 @@ world.children[0].refreshPalette();
 SnapExtensions.primitives.set('bb_clear()', function (steps) {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
-    stage.beetleController.beetle.clear();
+    stage.beetleController.clear();
 });
 
 SnapExtensions.primitives.set('bb_forward(steps)', function (steps) {
