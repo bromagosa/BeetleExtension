@@ -125,7 +125,8 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
         (this.inertialPanningY !== 0) ||
         (this.inertialAlphaOffset !== 0) ||
         (this.inertialBetaOffset !== 0) ||
-        (this.inertialRadiusOffset !== 0);
+        (this.inertialRadiusOffset !== 0) ||
+        (this.framing);
 };
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
@@ -394,7 +395,18 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 };
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
-    // check https://doc.babylonjs.com/features/featuresDeepDive/behaviors/cameraBehaviors#framing-behavior
+    var framingBehavior = new BABYLON.FramingBehavior(),
+        merge = BABYLON.Mesh.MergeMeshes(
+            this.controller.objects, true, true, undefined, false, true
+        );
+    this.controller.objects = [ merge ];
+    this.controller.camera.framing = true;
+    this.controller.camera.setTarget(merge);    
+    framingBehavior.attach(this.controller.camera);
+    framingBehavior.zoomOnMesh(merge, false, () => {
+        framingBehavior.detach(this.controller.camera);
+        this.controller.camera.framing = false;
+    });
 };
 
 BeetleDialogMorph.prototype.toggleGrid = function () {
