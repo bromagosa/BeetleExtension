@@ -421,24 +421,25 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 BeetleDialogMorph.prototype.zoomToFit = function () {
     if (this.controller.objects[0] && !this.controller.camera.framing) {
         var box = this.controller.objectsBoundingBox(),
-            cam = this.controller.camera;
+            cam = this.controller.camera,
+            framingBehavior = new BABYLON.FramingBehavior();
 
-        cam.framingBehavior = new BABYLON.FramingBehavior();
         cam.inertialPanningX = 0;
         cam.inertialPanningY = 0;
         cam.inertialAlphaOffset = 0;
         cam.inertialBetaOffset = 0;
         cam.inertialRadiusOffset = 0;
         cam.framing = true;
-        cam.framingBehavior.attach(cam);
 
-        cam.framingBehavior.zoomOnBoundingInfo(
+        framingBehavior.attach(cam);
+        cam.framingBehavior = framingBehavior;
+        framingBehavior.zoomOnBoundingInfo(
             box.minimumWorld,
             box.maximumWorld,
             false,
             () => {
                 cam.framing = false;
-                cam.framingBehavior.detach(cam);
+                framingBehavior.detach(cam);
             }
         );
     }
@@ -610,7 +611,7 @@ Beetle.prototype.defaultExtrusionShape = function () {
     var path = [],
         radius = .5;
 
-    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 2) {
+    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
         path.push(
             new BABYLON.Vector3(
                 radius * Math.cos(theta),
@@ -679,6 +680,7 @@ Beetle.prototype.makePrism = function () {
                         currentTransformMatrix
                     )
                 ),
+            meshIndices = this.extrusionShapeMesh.geometry.getIndices(),
             readOffset,
             writeOffset,
             positions = [],
@@ -688,7 +690,7 @@ Beetle.prototype.makePrism = function () {
             prism = new BABYLON.Mesh('prism', this.controller.scene);
 
         positions = backShape.reverse().flatMap(v=>[v.x, v.y, v.z]),
-        indices = this.extrusionShapeMesh.geometry.getIndices().slice(),
+        indices = meshIndices.slice(0, meshIndices.length / 2),
         positions.push(...frontShape.reverse().flatMap(v=>[v.x, v.y, v.z]));
         indices.push(...[...indices].reverse().map(i => i + numSides));
 
@@ -728,15 +730,14 @@ Beetle.prototype.makePrism = function () {
 
         BABYLON.VertexData.ComputeNormals(positions, indices, normals);
 
-        console.log('pos', positions);
-        console.log('idx', indices);
-
         vertexData.positions = positions;
         vertexData.indices = indices;
         vertexData.normals = normals;
 
         vertexData.applyToMesh(prism);
         prism.material = this.wings.material.clone();
+        prism.material.alpha = this.controller.ghostModeEnabled ? .25 : 1;
+        prism.material.wireframe = this.controller.wireframeEnabled;
 
         this.controller.objects.push(prism);
     }
