@@ -118,6 +118,11 @@ BABYLON.ArcRotateCamera.prototype.reset = function () {
     this.setTarget(BABYLON.Vector3.Zero());
     this.setPosition(new BABYLON.Vector3(0, 5, -10));
     this.alpha = Math.PI / 4;
+    this.framing = false;
+    if (this.framingBehavior) {
+        this.framingBehavior.detach(this);
+        this.framingBehavior = null;
+    }
 };
 
 BABYLON.ArcRotateCamera.prototype.isMoving = function () {
@@ -131,6 +136,7 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
     this.inertialRadiusOffset = delta * 0.5;
+    this.framing = false;
 };
 
 BABYLON.ArcRotateCamera.prototype.rotateBy = function (deltaXY) {
@@ -140,6 +146,7 @@ BABYLON.ArcRotateCamera.prototype.rotateBy = function (deltaXY) {
         this.inertialAlphaOffset = deltaX * -0.0005;
         this.inertialBetaOffset = deltaY * -0.001;
     }
+    this.framing = false;
 };
 
 BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
@@ -147,6 +154,7 @@ BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
         deltaY = deltaXY.y - this.clickOrigin.y;
     this.inertialPanningX = deltaX * -0.001;
     this.inertialPanningY = deltaY * 0.001;
+    this.framing = false;
 };
 
 BeetleController.prototype.initLights = function () {
@@ -198,6 +206,22 @@ BeetleController.prototype.render = function () {
         this.dialog.changed();
         this.shouldRerender = false;
     }
+};
+
+BeetleController.prototype.objectsBoundingBox = function () {
+    var min = this.objects[0].getBoundingInfo().boundingBox.minimumWorld,
+        max = this.objects[0].getBoundingInfo().boundingBox.maximumWorld;
+
+    this.objects.forEach(obj => {
+        var box = obj.getBoundingInfo().boundingBox;
+        min.x = Math.min(min.x, box.minimumWorld.x);
+        min.y = Math.min(min.y, box.minimumWorld.y);
+        min.z = Math.min(min.z, box.minimumWorld.z);
+        max.x = Math.max(max.x, box.maximumWorld.x);
+        max.y = Math.max(max.y, box.maximumWorld.y);
+        max.z = Math.max(max.z, box.maximumWorld.z);
+    });
+    return new BABYLON.BoundingBox(min, max);
 };
 
 // User facing methods, called from blocks
@@ -395,18 +419,29 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 };
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
-    var framingBehavior = new BABYLON.FramingBehavior(),
-        merge = BABYLON.Mesh.MergeMeshes(
-            this.controller.objects, true, true, undefined, false, true
+    if (this.controller.objects[0] && !this.controller.camera.framing) {
+        var framingBehavior = new BABYLON.FramingBehavior(),
+            box = this.controller.objectsBoundingBox();
+
+        this.controller.camera.inertialPanningX = 0;
+        this.controller.camera.inertialPanningY = 0;
+        this.controller.camera.inertialAlphaOffset = 0;
+        this.controller.camera.inertialBetaOffset = 0;
+        this.controller.camera.inertialRadiusOffset = 0;
+        this.controller.camera.framing = true;
+        framingBehavior.attach(this.controller.camera);
+        this.controller.camera.framingBehavior = framingBehavior;
+
+        framingBehavior.zoomOnBoundingInfo(
+            box.minimumWorld,
+            box.maximumWorld,
+            false,
+            () => {
+                this.controller.camera.framing = false;
+                framingBehavior.detach(this.controller.camera);
+            }
         );
-    this.controller.objects = [ merge ];
-    this.controller.camera.framing = true;
-    this.controller.camera.setTarget(merge);    
-    framingBehavior.attach(this.controller.camera);
-    framingBehavior.zoomOnMesh(merge, false, () => {
-        framingBehavior.detach(this.controller.camera);
-        this.controller.camera.framing = false;
-    });
+    }
 };
 
 BeetleDialogMorph.prototype.toggleGrid = function () {
