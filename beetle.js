@@ -420,25 +420,25 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
     if (this.controller.objects[0] && !this.controller.camera.framing) {
-        var framingBehavior = new BABYLON.FramingBehavior(),
-            box = this.controller.objectsBoundingBox();
+        var box = this.controller.objectsBoundingBox(),
+            cam = this.controller.camera;
 
-        this.controller.camera.inertialPanningX = 0;
-        this.controller.camera.inertialPanningY = 0;
-        this.controller.camera.inertialAlphaOffset = 0;
-        this.controller.camera.inertialBetaOffset = 0;
-        this.controller.camera.inertialRadiusOffset = 0;
-        this.controller.camera.framing = true;
-        framingBehavior.attach(this.controller.camera);
-        this.controller.camera.framingBehavior = framingBehavior;
+        cam.framingBehavior = new BABYLON.FramingBehavior();
+        cam.inertialPanningX = 0;
+        cam.inertialPanningY = 0;
+        cam.inertialAlphaOffset = 0;
+        cam.inertialBetaOffset = 0;
+        cam.inertialRadiusOffset = 0;
+        cam.framing = true;
+        cam.framingBehavior.attach(cam);
 
-        framingBehavior.zoomOnBoundingInfo(
+        cam.framingBehavior.zoomOnBoundingInfo(
             box.minimumWorld,
             box.maximumWorld,
             false,
             () => {
-                this.controller.camera.framing = false;
-                framingBehavior.detach(this.controller.camera);
+                cam.framing = false;
+                cam.framingBehavior.detach(cam);
             }
         );
     }
@@ -492,7 +492,7 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
     this.controller.objects.forEach(object =>
-        object.material.alpha = this.controller.ghostModeEnabled ? 1/3 : 1
+        object.material.alpha = this.controller.ghostModeEnabled ? .25 : 1
     );
     this.controller.changed();
 };
@@ -536,9 +536,8 @@ Beetle.prototype.init = function (controller) {
     this.extruding = false;
     this.recordingExtrusionShape = false;
     this.extrusionShape = this.defaultExtrusionShape();
+    this.extrusionShapeMesh = null;
     this.updateExtrusionShapeMesh();
-    this.extrusionMesh = null;
-    this.extrusionPoints = [];
 
     this.controller.changed();
 };
@@ -611,7 +610,7 @@ Beetle.prototype.defaultExtrusionShape = function () {
     var path = [],
         radius = .5;
 
-    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
+    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 2) {
         path.push(
             new BABYLON.Vector3(
                 radius * Math.cos(theta),
@@ -653,54 +652,101 @@ Beetle.prototype.updateExtrusionShapeMeshColor = function () {
 
 Beetle.prototype.extrudeToCurrentPoint = function () {
     this.extruding = true;
-    this.extrusionPoints.push(this.body.position.clone());
-    if (this.extrusionPoints[1]) {
-        if (this.extrusionShape) {
-            // if there is a base shape, extrude it to the current point
-            this.makePrism();
-        } else {
-            // otherwise, draw a line
-            // https://doc.babylonjs.com/features/featuresDeepDive/mesh/creation/param/lines
-        }
+    if (this.extrusionShape) {
+        // if there is a base shape, extrude it to the current point
+        this.makePrism();
+    } else {
+        // otherwise, draw a line
+        // https://doc.babylonjs.com/features/featuresDeepDive/mesh/creation/param/lines
     }
 };
 
 Beetle.prototype.makePrism = function () {
-    if (this.extrusionPoints[1]) {
-        if (this.extrusionMesh) {
-            // TODO investigate why updating existing mesh doesn't work!
-            this.controller.scene.removeMesh(this.extrusionMesh);
-            this.controller.objects.splice(
-                this.controller.objects.indexOf(this.extrusionMesh), 1);
-            this.extrusionMesh.dispose();
-        }
-        this.extrusionMesh = BABYLON.MeshBuilder.ExtrudeShape(
-            'extrusion',
-            {
-                shape: this.extrusionShape.map(
-                    v => new BABYLON.Vector3(v.x, v.z, 0)
+    var currentTransformMatrix = this.extrusionShapeMesh.computeWorldMatrix(true);
+    if (this.lastTransformMatrix) {
+        var backShape = this.extrusionShape.map(
+                v =>
+                    BABYLON.Vector3.TransformCoordinates(
+                        v,
+                        this.lastTransformMatrix
+                    )
                 ),
-                path: this.extrusionPoints,
-                scale: this.multiplierScale,
-                closeShape: true,
-                cap: BABYLON.Mesh.CAP_ALL
-            },
-            this.controller.scene
-        );
-        this.extrusionMesh.material = this.extrusionShapeMesh.material.clone();
-        this.extrusionMesh.material.alpha =
-            this.controller.ghostModeEnabled ? 1/3 : 1;
-        this.extrusionMesh.material.wireframe =
-            this.controller.wireframeEnabled;
-        this.controller.objects.push(this.extrusionMesh);
+            vertexData = new BABYLON.VertexData(),
+            frontShape = this.extrusionShape.map(
+                v =>
+                    BABYLON.Vector3.TransformCoordinates(
+                        v,
+                        currentTransformMatrix
+                    )
+                ),
+            readOffset,
+            writeOffset,
+            positions = [],
+            indices = [],
+            normals = [],
+            numSides = this.extrusionShape.length,
+            prism = new BABYLON.Mesh('prism', this.controller.scene);
+
+        positions = backShape.reverse().flatMap(v=>[v.x, v.y, v.z]),
+        indices = this.extrusionShapeMesh.geometry.getIndices().slice(),
+        positions.push(...frontShape.reverse().flatMap(v=>[v.x, v.y, v.z]));
+        indices.push(...[...indices].reverse().map(i => i + numSides));
+
+        // Add indices for all prism faces. Since faces are always rectangles,
+        // there are 4 vertices per prism face.
+        for (var n = 0; n < numSides * 4; n += 4) {
+            var offset = n + numSides * 2;
+            indices.push(offset, offset + 2, offset + 3);
+            indices.push(offset + 3, offset + 1, offset);
+        }
+
+        // Prism sides, one per vertex in prism base
+
+        // Do not ever change this code. It took AGES to get right and it works
+        // great now. If something fails, look somewhere else first.
+        function addPositions() {
+            positions[writeOffset] = positions[readOffset];             // x
+            positions[writeOffset + 1] = positions[readOffset + 1];     // y
+            positions[writeOffset + 2] = positions[readOffset + 2];     // z
+            writeOffset += 3;
+        };
+
+        writeOffset = numSides * 3 * 2;
+        for (var i = 0; i < numSides; i ++) {
+            readOffset = i * 3;
+            addPositions();
+
+            readOffset = (readOffset + 3) % (numSides * 3);
+            addPositions();
+
+            readOffset = (i + numSides) * 3;
+            addPositions();
+
+            readOffset = (((i + 1) % numSides) + numSides) * 3;
+            addPositions();
+        }
+
+        BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+        console.log('pos', positions);
+        console.log('idx', indices);
+
+        vertexData.positions = positions;
+        vertexData.indices = indices;
+        vertexData.normals = normals;
+
+        vertexData.applyToMesh(prism);
+        prism.material = this.wings.material.clone();
+
+        this.controller.objects.push(prism);
     }
+    this.lastTransformMatrix = currentTransformMatrix.clone();
     this.controller.changed();
 };
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
-    this.extrusionPoints = [];
-    this.extrusionMesh = null;
+    this.lastTransformMatrix = null;
 };
 
 Beetle.prototype.show = function () {
