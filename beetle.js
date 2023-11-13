@@ -208,6 +208,31 @@ BeetleController.prototype.render = function () {
     }
 };
 
+BeetleController.prototype.addMesh = function (aMesh) {
+    var merged = false;
+    this.objects.forEach((obj, i) => {
+        // merge these two meshes together
+        obj.csg = obj.csg ? obj.csg : BABYLON.CSG.FromMesh(obj);
+        obj.csg.unionInPlace(BABYLON.CSG.FromMesh(aMesh));
+        var newMesh = obj.csg.toMesh(
+                'union',
+                null,
+                this.scene,
+                false
+            );
+
+        newMesh.visibility = this.ghostModeEnabled ? .25 : 1;
+
+        obj.dispose();
+        aMesh.dispose();
+        this.scene.removeMesh(obj);
+        this.scene.removeMesh(aMesh);
+        this.objects[i] = newMesh;
+        merged = true;
+    });
+    if (!merged) { this.objects.push(aMesh); }
+};
+
 BeetleController.prototype.objectsBoundingBox = function () {
     var min = this.objects[0].getBoundingInfo().boundingBox.minimumWorld,
         max = this.objects[0].getBoundingInfo().boundingBox.maximumWorld;
@@ -227,11 +252,73 @@ BeetleController.prototype.objectsBoundingBox = function () {
 // User facing methods, called from blocks
 
 BeetleController.prototype.clear = function () {
-    this.objects.forEach(object => object.dispose());
+    this.objects.forEach(object => {
+        object.dispose(); 
+        this.scene.removeMesh(object);
+    });
     this.objects = [];
     this.changed();
 };
 
+// Simple Cache //////////////////////////////////////////////////////////
+
+BeetleController.Cache = {
+    materials: new Map(),
+    indices: new Map(),
+    normals: new Map()
+};
+
+BeetleController.Cache.getMaterial = function (color) {
+    var key = color.r + ',' + color.g + ',' + color.b,
+        material = this.materials.get(key);
+
+    if (!material) {
+        material = new BABYLON.StandardMaterial(color.toString()); // name
+        material.diffuseColor.set(color.r, color.g, color.b);
+        this.materials.set(key, material);
+    }
+
+    return material;
+};
+
+BeetleController.hash = function (object) {
+    var h1 = 0xdeadbeef, h2 = 0x41c6ce57, str = object.toString();
+    for (var i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
+BeetleController.Cache.getIndices = function (query) {
+    var hash = BeetleController.hash(query),
+        indices = this.indices.get(hash);
+
+    if (!indices) {
+        indices = query;
+        this.indices.set(hash, indices);
+    }
+
+    return indices;
+};
+
+BeetleController.Cache.getNormals = function (query) {
+    var hash = BeetleController.hash(query),
+        normals = this.normals.get(hash);
+
+    if (!normals) {
+        normals = query;
+        this.normals.set(hash, normals);
+    }
+
+    return normals;
+};
 
 // BeetleDialogMorph ////////////////////////////////////////////////////
 
@@ -480,9 +567,7 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
 
 BeetleDialogMorph.prototype.toggleWireframe = function () {
     this.controller.wireframeEnabled = !this.controller.wireframeEnabled;
-    this.controller.objects.forEach(object =>
-        object.material.wireframe = this.controller.wireframeEnabled
-    );
+    this.controller.scene.forceWireframe = this.controller.wireframeEnabled;
     this.controller.changed();
 };
 
@@ -492,9 +577,8 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
-    this.controller.objects.forEach(object =>
-        object.material.alpha = this.controller.ghostModeEnabled ? .25 : 1
-    );
+    this.controller.objects.forEach(o =>
+        o.visibility = this.controller.ghostModeEnabled ? 0.25 : 1);
     this.controller.changed();
 };
 
@@ -663,7 +747,13 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
 };
 
 Beetle.prototype.makePrism = function () {
-    var currentTransformMatrix = this.extrusionShapeMesh.computeWorldMatrix(true);
+    // TODO Optimize this !!!
+    // We're creating faces that will never see the light of day. We should only
+    // create the back face and prism side for the first extrusion, then only
+    // the prism side for the middle extrusions, and then only the front face
+    // when we stopExtruding.
+    var currentTransformMatrix =
+        this.extrusionShapeMesh.computeWorldMatrix(true);
     if (this.lastTransformMatrix) {
         var backShape = this.extrusionShape.map(
                 v =>
@@ -686,6 +776,8 @@ Beetle.prototype.makePrism = function () {
             positions = [],
             indices = [],
             normals = [],
+            vertexColors = [],
+            color = this.wings.material.diffuseColor,
             numSides = this.extrusionShape.length,
             prism = new BABYLON.Mesh('prism', this.controller.scene);
 
@@ -731,15 +823,17 @@ Beetle.prototype.makePrism = function () {
         BABYLON.VertexData.ComputeNormals(positions, indices, normals);
 
         vertexData.positions = positions;
-        vertexData.indices = indices;
-        vertexData.normals = normals;
+        vertexData.indices = BeetleController.Cache.getIndices(indices);
+        vertexData.normals = BeetleController.Cache.getNormals(normals);
 
         vertexData.applyToMesh(prism);
-        prism.material = this.wings.material.clone();
-        prism.material.alpha = this.controller.ghostModeEnabled ? .25 : 1;
-        prism.material.wireframe = this.controller.wireframeEnabled;
+        prism.useVertexColors = true;
+        for (var i = 0; i < prism.getTotalVertices(); i++) {
+            vertexColors.push(color.r, color.g, color.b, 1);
+        }
+        prism.setVerticesData(BABYLON.VertexBuffer.ColorKind, vertexColors);
 
-        this.controller.objects.push(prism);
+        this.controller.addMesh(prism);
     }
     this.lastTransformMatrix = currentTransformMatrix.clone();
     this.controller.changed();
