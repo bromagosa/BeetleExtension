@@ -53,6 +53,7 @@ BeetleController.prototype.init = function (stage) {
     this.wireframeEnabled = false;
 
     this.shouldRerender = false;
+    this.frameTick = 0;
 
     this.renderWidth = 480;
     this.renderHeight = 360;
@@ -201,10 +202,29 @@ BeetleController.prototype.changed = function () {
 };
 
 BeetleController.prototype.render = function () {
+    this.frameTick = (this.frameTick + 1) % 1000;
     if (this.scene && this.shouldRerender || this.camera.isMoving()) {
         this.scene.render();
         this.dialog.changed();
         this.shouldRerender = false;
+    }
+    if (((this.frameTick % 10) == 0) && this.objects[1]) {
+        merged = BABYLON.Mesh.MergeMeshes(
+            this.objects.slice(0,50),
+            true,
+            true,
+            undefined,
+            true,
+            true
+        );
+        for (var i = 0; i < 50; i ++) {
+            if (this.objects[i]) {
+                this.objects[i].dispose();
+                this.scene.removeMesh(this.objects[i]);
+            }
+        }
+        this.objects.splice(1,49);
+        this.objects[0] = merged;
     }
 };
 
@@ -232,6 +252,65 @@ BeetleController.prototype.clear = function () {
     this.changed();
 };
 
+// Simple Cache //////////////////////////////////////////////////////////
+
+BeetleController.Cache = {
+    materials: new Map(),
+    indices: new Map(),
+    normals: new Map()
+};
+
+BeetleController.Cache.getMaterial = function (color) {
+    var key = color.r + ',' + color.g + ',' + color.b,
+        material = this.materials.get(key);
+
+    if (!material) {
+        material = new BABYLON.StandardMaterial(color.toString()); // name
+        material.diffuseColor.set(color.r, color.g, color.b);
+        this.materials.set(key, material);
+    }
+
+    return material;
+};
+
+BeetleController.hash = function (object) {
+    var h1 = 0xdeadbeef, h2 = 0x41c6ce57, str = object.toString();
+    for (var i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
+BeetleController.Cache.getIndices = function (query) {
+    var hash = BeetleController.hash(query),
+        indices = this.indices.get(hash);
+
+    if (!indices) {
+        indices = query;
+        this.indices.set(hash, indices);
+    }
+
+    return indices;
+};
+
+BeetleController.Cache.getNormals = function (query) {
+    var hash = BeetleController.hash(query),
+        normals = this.normals.get(hash);
+
+    if (!normals) {
+        normals = query;
+        this.normals.set(hash, normals);
+    }
+
+    return normals;
+};
 
 // BeetleDialogMorph ////////////////////////////////////////////////////
 
@@ -480,8 +559,8 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
 
 BeetleDialogMorph.prototype.toggleWireframe = function () {
     this.controller.wireframeEnabled = !this.controller.wireframeEnabled;
-    this.controller.objects.forEach(object =>
-        object.material.wireframe = this.controller.wireframeEnabled
+    BeetleController.Cache.materials.forEach(material =>
+        material.wireframe = this.controller.wireframeEnabled
     );
     this.controller.changed();
 };
@@ -493,7 +572,7 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
     this.controller.objects.forEach(object =>
-        object.material.alpha = this.controller.ghostModeEnabled ? .25 : 1
+        object.visibility = this.controller.ghostModeEnabled ? .25 : 1
     );
     this.controller.changed();
 };
@@ -731,12 +810,14 @@ Beetle.prototype.makePrism = function () {
         BABYLON.VertexData.ComputeNormals(positions, indices, normals);
 
         vertexData.positions = positions;
-        vertexData.indices = indices;
-        vertexData.normals = normals;
+        vertexData.indices = BeetleController.Cache.getIndices(indices);
+        vertexData.normals = BeetleController.Cache.getNormals(normals);
 
         vertexData.applyToMesh(prism);
-        prism.material = this.wings.material.clone();
-        prism.material.alpha = this.controller.ghostModeEnabled ? .25 : 1;
+        prism.material = BeetleController.Cache.getMaterial(
+            this.wings.material.diffuseColor
+        );
+        prism.visibility = this.controller.ghostModeEnabled ? .25 : 1;
         prism.material.wireframe = this.controller.wireframeEnabled;
 
         this.controller.objects.push(prism);
