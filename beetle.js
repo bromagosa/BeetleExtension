@@ -65,7 +65,7 @@ BeetleController.prototype.init = function (stage) {
     this.initLights();
     this.initGrid();
 
-    this.objects = [];
+    this.beetleTrails = [];
 
     this.beetle = new Beetle(this);
 };
@@ -208,9 +208,11 @@ BeetleController.prototype.render = function () {
         this.dialog.changed();
         this.shouldRerender = false;
     }
-    if (((this.frameTick % 10) == 0) && this.objects[1]) {
+    /*
+    // Merge all beetleTrails, 50 at a time, every 10 frames
+    if (((this.frameTick % 10) == 0) && this.beetleTrails[1]) {
         merged = BABYLON.Mesh.MergeMeshes(
-            this.objects.slice(0,50),
+            this.beetleTrails.slice(0,50),
             true,
             true,
             undefined,
@@ -218,21 +220,22 @@ BeetleController.prototype.render = function () {
             true
         );
         for (var i = 0; i < 50; i ++) {
-            if (this.objects[i]) {
-                this.objects[i].dispose();
-                this.scene.removeMesh(this.objects[i]);
+            if (this.beetleTrails[i]) {
+                this.beetleTrails[i].dispose();
+                this.scene.removeMesh(this.beetleTrails[i]);
             }
         }
-        this.objects.splice(1,49);
-        this.objects[0] = merged;
+        this.beetleTrails.splice(1,49);
+        this.beetleTrails[0] = merged;
     }
+    */
 };
 
-BeetleController.prototype.objectsBoundingBox = function () {
-    var min = this.objects[0].getBoundingInfo().boundingBox.minimumWorld,
-        max = this.objects[0].getBoundingInfo().boundingBox.maximumWorld;
+BeetleController.prototype.beetleTrailsBoundingBox = function () {
+    var min = this.beetleTrails[0].getBoundingInfo().boundingBox.minimumWorld,
+        max = this.beetleTrails[0].getBoundingInfo().boundingBox.maximumWorld;
 
-    this.objects.forEach(obj => {
+    this.beetleTrails.forEach(obj => {
         var box = obj.getBoundingInfo().boundingBox;
         min.x = Math.min(min.x, box.minimumWorld.x);
         min.y = Math.min(min.y, box.minimumWorld.y);
@@ -247,8 +250,8 @@ BeetleController.prototype.objectsBoundingBox = function () {
 // User facing methods, called from blocks
 
 BeetleController.prototype.clear = function () {
-    this.objects.forEach(object => object.dispose());
-    this.objects = [];
+    this.beetleTrails.forEach(object => object.dispose());
+    this.beetleTrails = [];
     this.changed();
 };
 
@@ -498,8 +501,8 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 };
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
-    if (this.controller.objects[0] && !this.controller.camera.framing) {
-        var box = this.controller.objectsBoundingBox(),
+    if (this.controller.beetleTrails[0] && !this.controller.camera.framing) {
+        var box = this.controller.beetleTrailsBoundingBox(),
             cam = this.controller.camera,
             framingBehavior = new BABYLON.FramingBehavior();
 
@@ -571,7 +574,7 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
-    this.controller.objects.forEach(object =>
+    this.controller.beetleTrails.forEach(object =>
         object.visibility = this.controller.ghostModeEnabled ? .25 : 1
     );
     this.controller.changed();
@@ -617,6 +620,9 @@ Beetle.prototype.init = function (controller) {
     this.recordingExtrusionShape = false;
     this.extrusionShape = this.defaultExtrusionShape();
     this.extrusionShapeMesh = null;
+    this.previousScale;
+    this.previousRotation;
+    this.previousPosition;
     this.updateExtrusionShapeMesh();
 
     this.controller.changed();
@@ -690,7 +696,7 @@ Beetle.prototype.defaultExtrusionShape = function () {
     var path = [],
         radius = .5;
 
-    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
+    for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 2) {
         path.push(
             new BABYLON.Vector3(
                 radius * Math.cos(theta),
@@ -742,93 +748,38 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
 };
 
 Beetle.prototype.makePrism = function () {
-    var currentTransformMatrix = this.extrusionShapeMesh.computeWorldMatrix(true);
-    if (this.lastTransformMatrix) {
-        var backShape = this.extrusionShape.map(
-                v =>
-                    BABYLON.Vector3.TransformCoordinates(
-                        v,
-                        this.lastTransformMatrix
-                    )
-                ),
-            vertexData = new BABYLON.VertexData(),
-            frontShape = this.extrusionShape.map(
-                v =>
-                    BABYLON.Vector3.TransformCoordinates(
-                        v,
-                        currentTransformMatrix
-                    )
-                ),
-            meshIndices = this.extrusionShapeMesh.geometry.getIndices(),
-            readOffset,
-            writeOffset,
-            positions = [],
-            indices = [],
-            normals = [],
-            numSides = this.extrusionShape.length,
-            prism = new BABYLON.Mesh('prism', this.controller.scene);
-
-        positions = backShape.reverse().flatMap(v=>[v.x, v.y, v.z]),
-        indices = meshIndices.slice(0, meshIndices.length / 2),
-        positions.push(...frontShape.reverse().flatMap(v=>[v.x, v.y, v.z]));
-        indices.push(...[...indices].reverse().map(i => i + numSides));
-
+    if (this.previousPosition) {
+    // One of the faces is going to be in 0,0,0
+    // The other is going to be in 0,0,0 plus the difference between the
+    // previous position and the current one
+        var positionDelta =
+                this.body.position.subtract(
+                    this.previousPosition
+                ).reorderInPlace('YZX'),
+            frontFace = this.extrusionShape.map(v => v.add(positionDelta)),
+            numSides = frontFace.length,
+            vertices = this.extrusionShape.concat(frontFace).map(v => v.asArray()),
+            faces = [[0,1,2,3]];
         // Add indices for all prism faces. Since faces are always rectangles,
         // there are 4 vertices per prism face.
-        for (var n = 0; n < numSides * 4; n += 4) {
-            var offset = n + numSides * 2;
-            indices.push(offset, offset + 2, offset + 3);
-            indices.push(offset + 3, offset + 1, offset);
+        for (var n = 0; n < numSides; n += 1) {
+            faces.push([
+                (n % numSides) + 4,
+                ((n + 1) % numSides) + 4,
+                (n + 1) % numSides,
+                n
+            ]);
         }
-
-        // Prism sides, one per vertex in prism base
-
-        // Do not ever change this code. It took AGES to get right and it works
-        // great now. If something fails, look somewhere else first.
-        function addPositions() {
-            positions[writeOffset] = positions[readOffset];             // x
-            positions[writeOffset + 1] = positions[readOffset + 1];     // y
-            positions[writeOffset + 2] = positions[readOffset + 2];     // z
-            writeOffset += 3;
-        };
-
-        writeOffset = numSides * 3 * 2;
-        for (var i = 0; i < numSides; i ++) {
-            readOffset = i * 3;
-            addPositions();
-
-            readOffset = (readOffset + 3) % (numSides * 3);
-            addPositions();
-
-            readOffset = (i + numSides) * 3;
-            addPositions();
-
-            readOffset = (((i + 1) % numSides) + numSides) * 3;
-            addPositions();
-        }
-
-        BABYLON.VertexData.ComputeNormals(positions, indices, normals);
-
-        vertexData.positions = positions;
-        vertexData.indices = BeetleController.Cache.getIndices(indices);
-        vertexData.normals = BeetleController.Cache.getNormals(normals);
-
-        vertexData.applyToMesh(prism);
-        prism.material = BeetleController.Cache.getMaterial(
-            this.wings.material.diffuseColor
+        mesh = new BABYLON.MeshBuilder.CreatePolyhedron(
+            'prism',
+            { custom: { vertex: vertices, face: faces } }
         );
-        prism.visibility = this.controller.ghostModeEnabled ? .25 : 1;
-        prism.material.wireframe = this.controller.wireframeEnabled;
-
-        this.controller.objects.push(prism);
     }
-    this.lastTransformMatrix = currentTransformMatrix.clone();
-    this.controller.changed();
 };
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
-    this.lastTransformMatrix = null;
+    this.lastExtrusionShapeMesh = null;
 };
 
 Beetle.prototype.show = function () {
@@ -848,6 +799,7 @@ Beetle.prototype.isVisible = function () {
 // User facing methods, called from blocks
 
 Beetle.prototype.forward = function (steps) {
+    this.previousPosition = this.body.position.clone();
     this.body.locallyTranslate(
         new BABYLON.Vector3(0, 0, Number(steps) * this.multiplierScale)
     );
@@ -856,6 +808,7 @@ Beetle.prototype.forward = function (steps) {
 };
 
 Beetle.prototype.goto = function (x, y, z) {
+    this.previousPosition = this.body.position.clone();
     if (x !== '') { this.body.position.z = Number(x); }
     if (y !== '') { this.body.position.x = Number(y); }
     if (z !== '') { this.body.position.y = Number(z); }
@@ -872,6 +825,7 @@ Beetle.prototype.getPosition = function () {
 };
 
 Beetle.prototype.setRotations = function (x, y, z) {
+    this.previousRotation = this.body.rotationQuaternion.clone();
     this.body.rotationQuaternion = null;
     if (x !== '') { this.body.rotation.z = radians(Number(x)); }
     if (y !== '') { this.body.rotation.x = radians(Number(y) * -1); }
@@ -894,6 +848,7 @@ Beetle.prototype.getRotation = function () {
 };
 
 Beetle.prototype.rotate = function (x, y, z) {
+    this.previousRotation = this.body.rotationQuaternion.clone();
     if (x !== '') {
         this.body.rotate(BABYLON.Axis.Z, radians(Number(x)));
     }
@@ -907,11 +862,13 @@ Beetle.prototype.rotate = function (x, y, z) {
 };
 
 Beetle.prototype.pointTo = function (x, y, z) {
+    this.previousRotation = this.body.rotationQuaternion.clone();
     this.body.lookAt(new BABYLON.Vector3(Number(z), Number(x), Number(y)));
     this.controller.changed();
 };
 
 Beetle.prototype.setScale = function (scale) {
+    this.previousScale = this.multiplierScale;
     this.multiplierScale = scale;
     this.updateExtrusionShapeMesh();
 };
