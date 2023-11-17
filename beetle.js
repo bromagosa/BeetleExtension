@@ -65,7 +65,7 @@ BeetleController.prototype.init = function (stage) {
     this.initLights();
     this.initGrid();
 
-    this.objects = [];
+    this.beetleTrails = [];
 
     this.beetle = new Beetle(this);
 };
@@ -208,9 +208,9 @@ BeetleController.prototype.render = function () {
         this.dialog.changed();
         this.shouldRerender = false;
     }
-    if (((this.frameTick % 10) == 0) && this.objects[1]) {
+    if (((this.frameTick % 10) == 0) && this.beetleTrails[1]) {
         merged = BABYLON.Mesh.MergeMeshes(
-            this.objects.slice(0,50),
+            this.beetleTrails.slice(0,50),
             true,
             true,
             undefined,
@@ -218,21 +218,21 @@ BeetleController.prototype.render = function () {
             true
         );
         for (var i = 0; i < 50; i ++) {
-            if (this.objects[i]) {
-                this.objects[i].dispose();
-                this.scene.removeMesh(this.objects[i]);
+            if (this.beetleTrails[i]) {
+                this.beetleTrails[i].dispose();
+                this.scene.removeMesh(this.beetleTrails[i]);
             }
         }
-        this.objects.splice(1,49);
-        this.objects[0] = merged;
+        this.beetleTrails.splice(1,49);
+        this.beetleTrails[0] = merged;
     }
 };
 
-BeetleController.prototype.objectsBoundingBox = function () {
-    var min = this.objects[0].getBoundingInfo().boundingBox.minimumWorld,
-        max = this.objects[0].getBoundingInfo().boundingBox.maximumWorld;
+BeetleController.prototype.beetleTrailsBoundingBox = function () {
+    var min = this.beetleTrails[0].getBoundingInfo().boundingBox.minimumWorld,
+        max = this.beetleTrails[0].getBoundingInfo().boundingBox.maximumWorld;
 
-    this.objects.forEach(obj => {
+    this.beetleTrails.forEach(obj => {
         var box = obj.getBoundingInfo().boundingBox;
         min.x = Math.min(min.x, box.minimumWorld.x);
         min.y = Math.min(min.y, box.minimumWorld.y);
@@ -247,8 +247,8 @@ BeetleController.prototype.objectsBoundingBox = function () {
 // User facing methods, called from blocks
 
 BeetleController.prototype.clear = function () {
-    this.objects.forEach(object => object.dispose());
-    this.objects = [];
+    this.beetleTrails.forEach(object => object.dispose());
+    this.beetleTrails = [];
     this.changed();
 };
 
@@ -498,8 +498,8 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 };
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
-    if (this.controller.objects[0] && !this.controller.camera.framing) {
-        var box = this.controller.objectsBoundingBox(),
+    if (this.controller.beetleTrails[0] && !this.controller.camera.framing) {
+        var box = this.controller.beetleTrailsBoundingBox(),
             cam = this.controller.camera,
             framingBehavior = new BABYLON.FramingBehavior();
 
@@ -571,7 +571,7 @@ BeetleDialogMorph.prototype.wireframeEnabled = function () {
 
 BeetleDialogMorph.prototype.toggleGhostMode = function () {
     this.controller.ghostModeEnabled = !this.controller.ghostModeEnabled;
-    this.controller.objects.forEach(object =>
+    this.controller.beetleTrails.forEach(object =>
         object.visibility = this.controller.ghostModeEnabled ? .25 : 1
     );
     this.controller.changed();
@@ -582,6 +582,13 @@ BeetleDialogMorph.prototype.ghostModeEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.exportSTL = function () {
+    BABYLON.STLExport.CreateSTL(
+        this.controller.beetleTrails,
+        true, // download
+        'beetle-trails', // filename
+        false, // binary ?
+        false // little endian?
+    );
 };
 
 BeetleDialogMorph.prototype.ok = function () {
@@ -820,7 +827,7 @@ Beetle.prototype.makePrism = function () {
         prism.visibility = this.controller.ghostModeEnabled ? .25 : 1;
         prism.material.wireframe = this.controller.wireframeEnabled;
 
-        this.controller.objects.push(prism);
+        this.controller.beetleTrails.push(prism);
     }
     this.lastTransformMatrix = currentTransformMatrix.clone();
     this.controller.changed();
