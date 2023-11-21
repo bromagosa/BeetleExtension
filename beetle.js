@@ -677,6 +677,9 @@ Beetle.prototype.loadMeshes = function () {
 Beetle.prototype.newExtrusionShape = function (selector) {
     var path = [];
     switch (selector) {
+        case 'point':
+            path.push(new BABYLON.Vector3(0,0,0));
+            break;
         case 'triangle':
             path.push(new BABYLON.Vector3(-0.5, 0,  0));
             path.push(new BABYLON.Vector3(0.5,  0, 0));
@@ -712,18 +715,21 @@ Beetle.prototype.updateExtrusionShapeMesh = function () {
         this.controller.scene.removeMesh(this.extrusionShapeMesh);
     }
     this.extrusionShape = this.newExtrusionShape(this.extrusionShapeSelector);
-    this.extrusionShapeMesh = BABYLON.MeshBuilder.CreatePolygon(
-        'extrusionShape',
-        {
-            shape: this.extrusionShape,
-            sideOrientation: BABYLON.Mesh.DOUBLESIDE
-        },
-        this.controller.scene
-    );
-    this.extrusionShapeMesh.parent = this.body;
-    this.extrusionShapeMesh.scalingDeterminant = this.multiplierScale;
-    this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / -2);
-    this.updateExtrusionShapeMeshColor();
+    if (this.extrusionShape.length > 2) {
+        // not extruding points, let's build a polygon
+        this.extrusionShapeMesh = BABYLON.MeshBuilder.CreatePolygon(
+            'extrusionShape',
+            {
+                shape: this.extrusionShape,
+                sideOrientation: BABYLON.Mesh.DOUBLESIDE
+            },
+            this.controller.scene
+        );
+        this.extrusionShapeMesh.parent = this.body;
+        this.extrusionShapeMesh.scalingDeterminant = this.multiplierScale;
+        this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / -2);
+        this.updateExtrusionShapeMeshColor();
+    }
     this.controller.changed();
 };
 
@@ -748,14 +754,26 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
     this.extrusionShapeMesh.visibility = 1;
     this.extrusionPoints.push(this.body.position.clone());
     if (this.extrusionPoints[1]) {
-        // if there is a base shape, extrude it to the current point
-        if (this.extrusionShape) {
-            if (this.extrusionMesh) {
-                // TODO investigate why updating existing mesh doesn't work!
-                this.controller.scene.removeMesh(this.extrusionMesh);
-                trails.splice(trails.indexOf(this.extrusionMesh), 1);
-                this.extrusionMesh.dispose();
-            }
+        if (this.extrusionMesh) {
+            // TODO investigate why updating existing mesh doesn't work!
+            this.controller.scene.removeMesh(this.extrusionMesh);
+            trails.splice(trails.indexOf(this.extrusionMesh), 1);
+            this.extrusionMesh.dispose();
+        }
+        if (this.extrusionShape.length === 1) {
+            // draw a line
+            this.extrusionMesh = BABYLON.MeshBuilder.CreateLines(
+                'lines',
+                {
+                    points: this.extrusionPoints,
+                    useVertexAlpa: false
+                },
+                this.controller.scene
+            );
+            this.extrusionMesh.color =
+                this.wings.material.diffuseColor.clone()
+        } else {
+            // extrude a polygon
             this.extrusionMesh = BABYLON.MeshBuilder.ExtrudeShape(
                 'extrusion',
                 {
@@ -779,12 +797,9 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             if (this.extrusionShapeSelector !== 'circle') {
                 this.extrusionMesh.convertToFlatShadedMesh();
             }
-
-            trails.push(this.extrusionMesh);
-        } else {
-            // otherwise, draw a line
-            // https://doc.babylonjs.com/features/featuresDeepDive/mesh/creation/param/lines
         }
+
+        trails.push(this.extrusionMesh);
     }
     this.controller.changed();
 };
