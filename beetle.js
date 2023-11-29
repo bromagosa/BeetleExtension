@@ -105,16 +105,24 @@ BeetleController.prototype.initEngine = function () {
 BeetleController.prototype.initScene = function () {
     this.scene = new BABYLON.Scene(this.engine);
     this.scene.clearColor = new BABYLON.Color3(.5, .5, .5);
+    this.scene.shadowsEnabled = false;
+    this.scene.collisionEnabled = false;
+    this.scene.physicsEnabled = false;
 };
 
 BeetleController.prototype.initCamera = function () {
     this.camera = new BABYLON.ArcRotateCamera(
         'beetleCam', 0, 0, 10, new BABYLON.Vector3(0, 5, -10), this.scene);
+    this.camera.controller = this;
     this.camera.lowerRadiusLimit = 1.5;
+    this.camera.fpvEnabled = false;
     this.camera.reset();
 };
 
 BABYLON.ArcRotateCamera.prototype.reset = function () {
+    if (this.fpvEnabled) {
+        this.setFPV(false);
+    }
     this.radius = 10;
     this.setTarget(BABYLON.Vector3.Zero());
     this.setPosition(new BABYLON.Vector3(0, 5, -10));
@@ -136,26 +144,58 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
 };
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
-    this.inertialRadiusOffset = delta * 0.5;
-    this.framing = false;
+    if (!this.fpvEnabled) {
+        this.inertialRadiusOffset = delta * 0.5;
+        this.framing = false;
+    }
 };
 
 BABYLON.ArcRotateCamera.prototype.rotateBy = function (deltaXY) {
-    if (this.clickOrigin) {
-        var deltaX = deltaXY.x - this.clickOrigin.x,
-            deltaY = deltaXY.y - this.clickOrigin.y;
-        this.inertialAlphaOffset = deltaX * -0.0005;
-        this.inertialBetaOffset = deltaY * -0.001;
+    if (!this.fpvEnabled) {
+        if (this.clickOrigin) {
+            var deltaX = deltaXY.x - this.clickOrigin.x,
+                deltaY = deltaXY.y - this.clickOrigin.y;
+            this.inertialAlphaOffset = deltaX * -0.0005;
+            this.inertialBetaOffset = deltaY * -0.001;
+        }
+        this.framing = false;
     }
-    this.framing = false;
 };
 
 BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
-    var deltaX = deltaXY.x - this.clickOrigin.x,
-        deltaY = deltaXY.y - this.clickOrigin.y;
-    this.inertialPanningX = deltaX * -0.001;
-    this.inertialPanningY = deltaY * 0.001;
+    if (!this.fpvEnabled) {
+        var deltaX = deltaXY.x - this.clickOrigin.x,
+            deltaY = deltaXY.y - this.clickOrigin.y;
+        this.inertialPanningX = deltaX * -0.001;
+        this.inertialPanningY = deltaY * 0.001;
+        this.framing = false;
+    }
+};
+
+BABYLON.ArcRotateCamera.prototype.toggleFPV = function () {
+    this.setFPV(!this.fpvEnabled);
+};
+
+BABYLON.ArcRotateCamera.prototype.setFPV = function (setIt) {
+    this.fpvEnabled = setIt;
     this.framing = false;
+    this.inertialPanningX = 0;
+    this.inertialPanningY = 0;
+    this.inertialAlphaOffset = 0;
+    this.inertialBetaOffset = 0;
+    this.inertialRadiusOffset = 0;
+    if (setIt) {
+        this.parent = this.controller.beetle.body;
+        this.position = new BABYLON.Vector3(0,0,-0.5);
+        this.target = new BABYLON.Vector3(0,0,0);
+        this.lowerRadiusLimit = 0.5;
+        this.radius = 0.5;
+        this.controller.changed();
+    } else {
+        this.parent = null;
+        this.reset();
+    }
+    this.controller.changed();
 };
 
 BeetleController.prototype.initLights = function () {
@@ -317,25 +357,14 @@ BeetleDialogMorph.prototype.initRenderView = function () {
     this.renderView = new Morph(); // a morph where we'll display the 3d content
     this.renderView.setExtent(controller.renderExtent());
 
-    this.renderView.drawOn = function (ctx, rect) {
-        var pic = controller.glCanvas;
-
-        window.ctx = ctx;
-
-        ctx.save();
+    this.renderView.render = function (ctx) {
         ctx.drawImage(
-            pic,
+            controller.glCanvas,
             0,
             0,
-            controller.renderWidth,
-            controller.renderHeight,
-            this.left(),
-            this.top(),
             controller.renderWidth,
             controller.renderHeight
         );
-        ctx.restore();
-
     };
 
     this.renderView.step = function () { controller.render(); };
@@ -382,6 +411,12 @@ BeetleDialogMorph.prototype.initControlPanel = function () {
                 type: 'toggle',
                 action: 'toggleGhostMode',
                 query: 'ghostModeEnabled'
+            },
+            {
+                label: 'First person perspective',
+                type: 'toggle',
+                action: 'toggleFPV',
+                query: 'fpvEnabled'
             }
         ],
         [
@@ -457,11 +492,17 @@ BeetleDialogMorph.prototype.initMouseControls = function () {
 
 BeetleDialogMorph.prototype.resetCamera = function () {
     this.controller.camera.reset();
+    this.controlPanel.children.forEach(column =>
+        column.children.forEach(morph => {
+            if (morph.refresh) { morph.refresh(); }
+        })
+    );
     this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
     if (this.controller.beetleTrails[0] && !this.controller.camera.framing) {
+        if (this.fpvEnabled) { this.resetCamera(); }
         var box = this.controller.beetleTrailsBoundingBox(),
             cam = this.controller.camera,
             framingBehavior = new BABYLON.FramingBehavior();
@@ -509,8 +550,6 @@ BeetleDialogMorph.prototype.axesEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleBeetle = function () {
-    //FIXME should toggle just the beetle, not the extrusion shape mesh
-    // I should make it so the extrusion shape mesh can also be toggled
     var beetle = this.controller.beetle;
     if (this.beetleEnabled()) { beetle.hide(); } else { beetle.show(); }
     this.controller.changed();
@@ -555,6 +594,14 @@ BeetleDialogMorph.prototype.toggleGhostMode = function () {
 
 BeetleDialogMorph.prototype.ghostModeEnabled = function () {
     return this.controller.ghostModeEnabled;
+};
+
+BeetleDialogMorph.prototype.toggleFPV = function () {
+    this.controller.camera.toggleFPV();
+};
+
+BeetleDialogMorph.prototype.fpvEnabled = function () {
+    return this.controller.camera.fpvEnabled;
 };
 
 BeetleDialogMorph.prototype.exportSTL = function () {
@@ -773,6 +820,8 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             this.extrusionMesh.color =
                 this.wings.material.diffuseColor.clone()
         } else {
+            // TODO: check if last two points are the same, and make a lathe
+            // geometry if they are, otherwise:
             // extrude a polygon
             this.extrusionMesh = BABYLON.MeshBuilder.ExtrudeShape(
                 'extrusion',
