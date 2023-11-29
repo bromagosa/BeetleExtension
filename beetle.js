@@ -185,6 +185,7 @@ BABYLON.ArcRotateCamera.prototype.setFPV = function (setIt) {
     this.inertialBetaOffset = 0;
     this.inertialRadiusOffset = 0;
     if (setIt) {
+        this.saveViewpoint();
         this.parent = this.controller.beetle.body;
         this.position = new BABYLON.Vector3(0,0,-0.5);
         this.target = new BABYLON.Vector3(0,0,0);
@@ -194,8 +195,29 @@ BABYLON.ArcRotateCamera.prototype.setFPV = function (setIt) {
     } else {
         this.parent = null;
         this.reset();
+        this.restoreViewpoint();
     }
     this.controller.changed();
+};
+
+BABYLON.ArcRotateCamera.prototype.saveViewpoint = function () {
+    this.oldViewpoint = {
+        alpha: this.alpha,
+        beta: this.beta,
+        radius: this.radius,
+        position: this.position.clone(),
+        target: this.target.clone()
+    };
+};
+
+BABYLON.ArcRotateCamera.prototype.restoreViewpoint = function () {
+    if (this.oldViewpoint) {
+        this.position = this.oldViewpoint.position;
+        this.target = this.oldViewpoint.target;
+        this.alpha = this.oldViewpoint.alpha;
+        this.beta = this.oldViewpoint.beta;
+        this.radius = this.oldViewpoint.radius;
+    }
 };
 
 BeetleController.prototype.initLights = function () {
@@ -271,6 +293,45 @@ BeetleController.prototype.clear = function () {
     this.beetleTrails.forEach(object => object.dispose());
     this.beetleTrails = [];
     this.changed();
+};
+
+BeetleController.prototype.currentView = function () {
+    var wasShowingAxes = this.dialog.axesEnabled(),
+        wasShowingBeetle = this.dialog.beetleEnabled(),
+        wasShowingGrid = this.dialog.gridEnabled,
+        wasFPV = this.dialog.fpvEnabled(),
+        canvas = newCanvas(
+            new Point(
+                this.renderWidth,
+                this.renderHeight
+            ),
+            true
+        ),
+        ctx = canvas.getContext('2d'),
+        costume;
+
+    if (wasShowingAxes) { this.dialog.toggleAxes(); }
+    if (wasShowingBeetle) { this.dialog.toggleBeetle(); }
+    if (wasShowingGrid) { this.dialog.toggleGrid(); }
+    if (!wasFPV) { this.camera.toggleFPV(); }
+
+    this.scene.clearColor = new BABYLON.Color4(0,0,0,0);
+    this.scene.render();
+    ctx.drawImage(this.glCanvas, 0, 0);
+    costume = new Costume(
+        canvas,
+        this.stage.newCostumeName(localize('render'))
+    );
+
+    if (wasShowingAxes) { this.dialog.toggleAxes(); }
+    if (wasShowingBeetle) { this.dialog.toggleBeetle(); }
+    if (wasShowingGrid) { this.dialog.toggleGrid(); }
+    if (!wasFPV) { this.camera.toggleFPV(); }
+
+    this.scene.clearColor = new BABYLON.Color3(.5,.5,.5);
+    this.scene.render();
+
+    return costume;
 };
 
 // Simple Cache //////////////////////////////////////////////////////////
@@ -413,7 +474,7 @@ BeetleDialogMorph.prototype.initControlPanel = function () {
                 query: 'ghostModeEnabled'
             },
             {
-                label: 'First person perspective',
+                label: 'First person view',
                 type: 'toggle',
                 action: 'toggleFPV',
                 query: 'fpvEnabled'
@@ -502,7 +563,7 @@ BeetleDialogMorph.prototype.resetCamera = function () {
 
 BeetleDialogMorph.prototype.zoomToFit = function () {
     if (this.controller.beetleTrails[0] && !this.controller.camera.framing) {
-        if (this.fpvEnabled) { this.resetCamera(); }
+        if (this.fpvEnabled()) { this.resetCamera(); }
         var box = this.controller.beetleTrailsBoundingBox(),
             cam = this.controller.camera,
             framingBehavior = new BABYLON.FramingBehavior();
@@ -950,7 +1011,6 @@ Beetle.prototype.setScale = function (scale) {
     this.updateExtrusionShapeMesh();
 };
 
-Beetle.prototype.currentCostume = function () {};
 
 // SnapExtensions API ////////////////////////////////////////////////////
 
@@ -1055,8 +1115,8 @@ SnapExtensions.primitives.set('bb_scale()', function () {
     return stage.beetleController.beetle.multiplierScale;
 });
 
-SnapExtensions.primitives.set('bb_costume()', function () {
+SnapExtensions.primitives.set('bb_beetleView()', function () {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
-    return stage.beetleController.currentCostume();
+    return stage.beetleController.currentView();
 });
