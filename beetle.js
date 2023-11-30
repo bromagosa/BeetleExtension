@@ -942,10 +942,14 @@ Beetle.prototype.isVisible = function () {
 
 // User facing methods, called from blocks
 
-Beetle.prototype.forward = function (steps) {
-    this.body.locallyTranslate(
-        new BABYLON.Vector3(0, 0, Number(steps) * this.multiplierScale)
-    );
+Beetle.prototype.move = function (axis, steps) {
+    var scaledSteps = Number(steps) * this.multiplierScale,
+        vector = new BABYLON.Vector3(
+            axis === 'y' ? scaledSteps : 0,
+            axis === 'z' ? scaledSteps : 0,
+            axis === 'x' ? scaledSteps : 0
+        );
+    this.body.locallyTranslate(vector);
     this.controller.changed();
     if (this.extruding) { this.extrudeToCurrentPoint(); }
 };
@@ -1042,10 +1046,10 @@ SnapExtensions.primitives.set('bb_clear()', function (steps) {
     stage.beetleController.clear();
 });
 
-SnapExtensions.primitives.set('bb_forward(steps)', function (steps) {
+SnapExtensions.primitives.set('bb_move(axis, steps)', function (axis, steps) {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
-    stage.beetleController.beetle.forward(steps);
+    stage.beetleController.beetle.move(axis, steps);
 });
 
 SnapExtensions.primitives.set('bb_goto(x, y, z)', function (x, y, z) {
