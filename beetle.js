@@ -145,7 +145,7 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
     if (!this.fpvEnabled) {
-        this.inertialRadiusOffset = delta * 0.5;
+        this.inertialRadiusOffset = delta * (this.radius / 12);
         this.framing = false;
     }
 };
@@ -166,8 +166,8 @@ BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
     if (!this.fpvEnabled) {
         var deltaX = deltaXY.x - this.clickOrigin.x,
             deltaY = deltaXY.y - this.clickOrigin.y;
-        this.inertialPanningX = deltaX * -0.001;
-        this.inertialPanningY = deltaY * 0.001;
+        this.inertialPanningX = deltaX * (this.radius / -10000);
+        this.inertialPanningY = deltaY * (this.radius / 10000);
         this.framing = false;
     }
 };
