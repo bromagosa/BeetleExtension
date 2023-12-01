@@ -145,6 +145,8 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
     if (!this.fpvEnabled) {
+        // the lower radius limit gets stuck sometimes, so let's set it always
+        this.lowerRadiusLimit = 1.5;
         this.inertialRadiusOffset = delta * (this.radius / 12);
         this.framing = false;
     }
@@ -784,34 +786,45 @@ Beetle.prototype.loadMeshes = function () {
 
 Beetle.prototype.newExtrusionShape = function (selector) {
     var path = [];
-    switch (selector) {
-        case 'point':
-            path.push(new BABYLON.Vector3(0,0,0));
-            break;
-        case 'triangle':
-            path.push(new BABYLON.Vector3(-0.5, 0,  0));
-            path.push(new BABYLON.Vector3(0.5,  0, 0));
-            path.push(new BABYLON.Vector3(0, 0, Math.sqrt(2) / 2));
-            break;
-        case 'square':
-            path.push(new BABYLON.Vector3(-0.5, 0,  0.5));
-            path.push(new BABYLON.Vector3(-0.5, 0, -0.5));
-            path.push(new BABYLON.Vector3(0.5,  0, -0.5));
-            path.push(new BABYLON.Vector3(0.5,  0,  0.5));
-            break;
-        default:
-        case 'circle':
-            var radius = .5;
-            for (var theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
+    if (selector instanceof List) {
+        selector.asArray().forEach(p => {
+            if (p instanceof List) {
                 path.push(
-                    new BABYLON.Vector3(
-                        radius * Math.cos(theta),
-                        0,
-                        radius * Math.sin(theta),
-                    )
+                    new BABYLON.Vector3(Number(p.at(1)), 0, Number(p.at(2)))
                 );
             }
-            break;
+        });
+    } else {
+        switch (selector) {
+            case 'point':
+                path.push(new BABYLON.Vector3(0,0,0));
+                break;
+            case 'triangle':
+                path.push(new BABYLON.Vector3(-0.5, 0,  0));
+                path.push(new BABYLON.Vector3(0.5,  0, 0));
+                path.push(new BABYLON.Vector3(0, 0, Math.sqrt(2) / 2));
+                break;
+            case 'square':
+                path.push(new BABYLON.Vector3(-0.5, 0,  0.5));
+                path.push(new BABYLON.Vector3(-0.5, 0, -0.5));
+                path.push(new BABYLON.Vector3(0.5,  0, -0.5));
+                path.push(new BABYLON.Vector3(0.5,  0,  0.5));
+                break;
+            default:
+            case 'circle':
+                var radius = .5,
+                    theta;
+                for (theta = 0; theta < 2 * Math.PI; theta += Math.PI / 16) {
+                    path.push(
+                        new BABYLON.Vector3(
+                            radius * Math.cos(theta),
+                            0,
+                            radius * Math.sin(theta),
+                        )
+                    );
+                }
+                break;
+        }
     }
 
 
