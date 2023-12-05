@@ -53,7 +53,6 @@ BeetleController.prototype.init = function (stage) {
     this.wireframeEnabled = false;
 
     this.shouldRerender = false;
-    this.frameTick = 0;
 
     this.renderWidth = 480;
     this.renderHeight = 360;
@@ -714,8 +713,7 @@ Beetle.prototype.init = function (controller) {
     this.extrusionShapeMesh = null;
     this.updateExtrusionShapeMesh();
     this.extrusionShapeMesh.enabled = true;
-    this.extrusionMesh = null;
-    this.extrusionPoints = [];
+    this.lastTransformMatrix = null;
 
     this.controller.changed();
 };
@@ -870,68 +868,83 @@ Beetle.prototype.updateExtrusionShapeMeshColor = function () {
 };
 
 Beetle.prototype.extrudeToCurrentPoint = function () {
-    var trails = this.controller.beetleTrails;
     this.extruding = true;
-    this.extrusionShapeMesh.visibility = 1;
-    this.extrusionPoints.push(this.body.position.clone());
-    if (this.extrusionPoints[1]) {
-        if (this.extrusionMesh) {
-            // TODO investigate why updating existing mesh doesn't work!
-            this.controller.scene.removeMesh(this.extrusionMesh);
-            trails.splice(trails.indexOf(this.extrusionMesh), 1);
-            this.extrusionMesh.dispose();
-        }
-        if (this.extrusionShape.length === 1) {
-            // draw a line
-            this.extrusionMesh = BABYLON.MeshBuilder.CreateLines(
-                'lines',
-                {
-                    points: this.extrusionPoints,
-                    useVertexAlpa: false
-                },
-                this.controller.scene
-            );
-            this.extrusionMesh.color =
-                this.wings.material.diffuseColor.clone()
-        } else {
-            // TODO: check if last two points are the same, and make a lathe
-            // geometry if they are, otherwise:
-            // extrude a polygon
-            this.extrusionMesh = BABYLON.MeshBuilder.ExtrudeShape(
-                'extrusion',
-                {
-                    shape: this.extrusionShape.map(
-                        v => new BABYLON.Vector3(v.x, v.z, 0)
+    if (this.extrusionShape.length === 1) {
+        // draw a line
+        this.extrusionMesh = BABYLON.MeshBuilder.CreateLines(
+            'lines',
+            {
+                points: this.extrusionPoints,
+                useVertexAlpha: false
+            },
+            this.controller.scene
+        );
+        this.extrusionMesh.color =
+            this.wings.material.diffuseColor.clone()
+    } else {
+        // extrude a polygon
+        var currentTransformMatrix =
+                this.extrusionShapeMesh.computeWorldMatrix(true);
+        this.extrusionShapeMesh.visibility = 1;
+        if (this.lastTransformMatrix) {
+            var backFace =
+                this.extrusionShape.map(
+                    v =>
+                        BABYLON.Vector3.TransformCoordinates(
+                            v,
+                            this.lastTransformMatrix
+                        )
                     ),
-                    path: this.extrusionPoints,
-                    scale: this.multiplierScale,
-                    closeShape: true,
-                    cap: BABYLON.Mesh.CAP_ALL
-                },
-                this.controller.scene
+                frontFace =
+                    this.extrusionShape.map(v =>
+                        BABYLON.Vector3.TransformCoordinates(
+                            v,
+                            currentTransformMatrix
+                        )
+                    ),
+                numSides = this.extrusionShape.length,
+                vertices = backFace.concat(frontFace).map(v => v.asArray()),
+                faces = [[...Array(numSides).keys()]];
+
+            // Add indices for all prism faces.
+            // Since faces are always trapezoids, there are 4 vertices per face.
+            for (var n = 0; n < numSides; n++) {
+                faces.push([
+                    (n % numSides) + 4,
+                    n,
+                    (n + 1) % numSides,
+                    ((n + 1) % numSides) + 4
+                ]);
+            }
+            var prism = new BABYLON.MeshBuilder.CreatePolyhedron(
+                'prism',
+                { custom: { vertex: vertices, face: faces } }
             );
-            this.extrusionMesh.material = BeetleController.Cache.getMaterial(
+            prism.material = BeetleController.Cache.getMaterial(
                 this.extrusionShapeMesh.material.diffuseColor
             );
-            this.extrusionMesh.material.wireframe =
+            prism.material.wireframe =
                 this.controller.wireframeEnabled;
-            this.extrusionMesh.visibility =
+            prism.visibility =
                 this.controller.ghostModeEnabled ? .25 : 1
-            if (this.extrusionShapeSelector !== 'circle') {
-                this.extrusionMesh.convertToFlatShadedMesh();
-            }
+            BABYLON.Mesh.MergeMeshes(
+                [
+                    prism,
+                    this.controller.beetleTrails[
+                        this.controller.beetleTrails.length - 1
+                    ]
+                ]
+            );
         }
-
-        trails.push(this.extrusionMesh);
+        this.lastTransformMatrix = currentTransformMatrix.clone();
+        this.controller.changed();
     }
-    this.controller.changed();
 };
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
+    this.lastTransformMatrix = null;
     this.extrusionShapeMesh.visibility = 0;
-    this.extrusionPoints = [];
-    this.extrusionMesh = null;
     this.controller.changed();
 };
 
