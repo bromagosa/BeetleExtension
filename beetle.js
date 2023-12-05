@@ -904,16 +904,19 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                     ),
                 numSides = this.extrusionShape.length,
                 vertices = backFace.concat(frontFace).map(v => v.asArray()),
-                faces = [[...Array(numSides).keys()]];
+                faces = [
+                    [...Array(numSides).keys()].reverse(), // back
+                    [...Array(numSides).keys()].map(f => f + numSides) // front
+                ];
 
             // Add indices for all prism faces.
             // Since faces are always trapezoids, there are 4 vertices per face.
             for (var n = 0; n < numSides; n++) {
                 faces.push([
-                    (n % numSides) + 4,
+                    (n % numSides) + numSides,
                     n,
                     (n + 1) % numSides,
-                    ((n + 1) % numSides) + 4
+                    ((n + 1) % numSides) + numSides
                 ]);
             }
             var prism = new BABYLON.MeshBuilder.CreatePolyhedron(
@@ -927,14 +930,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                 this.controller.wireframeEnabled;
             prism.visibility =
                 this.controller.ghostModeEnabled ? .25 : 1
-            BABYLON.Mesh.MergeMeshes(
-                [
-                    prism,
-                    this.controller.beetleTrails[
-                        this.controller.beetleTrails.length - 1
-                    ]
-                ]
-            );
+            this.controller.beetleTrails.push(prism);
         }
         this.lastTransformMatrix = currentTransformMatrix.clone();
         this.controller.changed();
