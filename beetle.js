@@ -847,10 +847,11 @@ Beetle.prototype.updateExtrusionShapeMesh = function () {
     this.extrusionShape = this.newExtrusionShape(this.extrusionShapeSelector);
     if (this.extrusionShape.length > 2) {
         // not extruding points, let's build a polygon
-        this.extrusionShapeMesh = BABYLON.MeshBuilder.CreateLines(
+        this.extrusionShapeMesh = BABYLON.MeshBuilder.CreatePolygon(
             'extrusionShape',
             {
-                points: this.extrusionShape,
+                shape: this.extrusionShape,
+                sideOrientation: BABYLON.Mesh.DOUBLESIDE
             },
             this.controller.scene
         );

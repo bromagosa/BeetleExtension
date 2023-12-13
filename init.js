@@ -1,4 +1,5 @@
-var baseUrl = world.children[0].getVar('__module__beetle__');
+var moduleUrl = world.children[0].getVar('__module__beetle__'),
+    baseUrl = moduleUrl.substring(0, moduleUrl.lastIndexOf('/') + 1);
 
 function loadSrc (url) {
     var url = baseUrl + url;
