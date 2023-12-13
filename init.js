@@ -1,5 +1,5 @@
-var deploy = false,
-    baseUrl = deploy ? './' : 'https://localhost:8000/';
+var deploy = window.location.href.indexOf('localhost') === -1,
+    baseUrl = deploy ? './libraries/beetle/' : 'https://localhost:8000/';
 
 function loadSrc (url) {
     var url = baseUrl + url;

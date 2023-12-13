@@ -85,7 +85,9 @@ BeetleController.prototype.renderExtent = function () {
 };
 
 BeetleController.prototype.initCanvas = function () {
+    disableRetinaSupport();
     this.glCanvas = document.createElement('canvas');
+    this.glCanvas.isRetinaEnabled = false;
     this.glCanvas.width = this.renderWidth;
     this.glCanvas.height = this.renderHeight;
 };
@@ -96,9 +98,11 @@ BeetleController.prototype.initEngine = function () {
         true,
         {
             preserveDrawingBuffer: true,
-            stencil: true
+            stencil: true,
+            adaptToDeviceRatio: true
         }
     );
+    enableRetinaSupport();
 };
 
 BeetleController.prototype.initScene = function () {
@@ -318,7 +322,13 @@ BeetleController.prototype.currentView = function () {
 
     this.scene.clearColor = new BABYLON.Color4(0,0,0,0);
     this.scene.render();
-    ctx.drawImage(this.glCanvas, 0, 0);
+    ctx.drawImage(
+        this.glCanvas,
+        0,
+        0,
+        this.renderWidth,
+        this.renderHeight
+    );
     costume = new Costume(
         canvas,
         this.stage.newCostumeName(localize('render'))
@@ -416,7 +426,8 @@ BeetleDialogMorph.prototype.buildContents = function () {
 BeetleDialogMorph.prototype.initRenderView = function () {
     var controller = this.controller;
 
-    this.renderView = new Morph(); // a morph where we'll display the 3d content
+    // a morph where we'll display the 3d content
+    this.renderView = new Morph();
     this.renderView.setExtent(controller.renderExtent());
 
     this.renderView.render = function (ctx) {
