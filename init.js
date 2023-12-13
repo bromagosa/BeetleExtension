@@ -1,5 +1,4 @@
-var deploy = window.location.href.indexOf('localhost') === -1,
-    baseUrl = deploy ? './libraries/beetle/' : 'https://localhost:8000/';
+var baseUrl = world.children[0].getVar('__module__beetle__');
 
 function loadSrc (url) {
     var url = baseUrl + url;
