@@ -231,12 +231,14 @@ BeetleController.prototype.initLights = function () {
         new BABYLON.Vector3(0, 1, 0),
         this.scene
     );
+    /*
     this.camera.light = new BABYLON.PointLight(
         'pointLight',
         this.camera.position,
         this.scene
     );
     this.camera.light.parent = this.camera;
+    */
 };
 
 BeetleController.prototype.initGrid = function () {
@@ -245,7 +247,6 @@ BeetleController.prototype.initGrid = function () {
     gridMaterial.gridRatio = 1;
     gridMaterial.backFaceCulling = false;
     gridMaterial.minorUnitVisibility = 0.45;
-    gridMaterial.backFaceCulling = false;
     gridMaterial.mainColor = new BABYLON.Color3(1, 1, 1);
     gridMaterial.lineColor = new BABYLON.Color3(1.0, 1.0, 1.0);
     gridMaterial.opacity = 0.98;
@@ -816,12 +817,14 @@ Beetle.prototype.newExtrusionShape = function (selector) {
                 path.push(new BABYLON.Vector3(-0.5, 0,  0));
                 path.push(new BABYLON.Vector3(0.5,  0, 0));
                 path.push(new BABYLON.Vector3(0, 0, Math.sqrt(2) / 2));
+                path.push(new BABYLON.Vector3(-0.5, 0,  0));
                 break;
             case 'square':
                 path.push(new BABYLON.Vector3(-0.5, 0,  0.5));
                 path.push(new BABYLON.Vector3(-0.5, 0, -0.5));
                 path.push(new BABYLON.Vector3(0.5,  0, -0.5));
                 path.push(new BABYLON.Vector3(0.5,  0,  0.5));
+                path.push(new BABYLON.Vector3(-0.5, 0,  0.5));
                 break;
             default:
             case 'circle':
@@ -836,6 +839,7 @@ Beetle.prototype.newExtrusionShape = function (selector) {
                         )
                     );
                 }
+                path.push(path[0]);
                 break;
         }
     }
@@ -849,7 +853,7 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
         this.controller.scene.removeMesh(this.extrusionShapeOutline);
     }
     this.extrusionShape = this.newExtrusionShape(this.extrusionShapeSelector);
-    if (this.extrusionShape.length > 2) {
+    if (this.extrusionShape.length > 1) {
         // not extruding points, let's draw a shape outline
         this.extrusionShapeOutline = BABYLON.MeshBuilder.CreateLines(
             'extrusionShape',
@@ -866,7 +870,6 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
     this.extrusionShapeOutline.visibility = this.extruding ? 1 : 0;
     this.controller.changed();
 };
-
 Beetle.prototype.extrudeToCurrentPoint = function () {
     this.extruding = true;
     if (this.extrusionShape.length === 1) {
@@ -903,14 +906,21 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                     ),
                 numSides = this.extrusionShape.length,
                 vertices = backFace.concat(frontFace).map(v => v.asArray()),
-                faces = [
-                    [...Array(numSides).keys()].reverse(), // back
-                    [...Array(numSides).keys()].map(f => f + numSides) // front
-                ];
+                faces = [];
+
+            if (this.extrusionShape[0].equalsWithEpsilon(
+                    this.extrusionShape[this.extrusionShape.length - 1],
+                    0.001
+            )) {
+                // the first and last point are very close to each other, so
+                // we assume the user is trying to build a closed volume
+                faces.push([...Array(numSides).keys()].reverse()); // back
+                faces.push([...Array(numSides).keys()].map(f => f + numSides));
+            }
 
             // Add indices for all prism faces.
             // Since faces are always trapezoids, there are 4 vertices per face.
-            for (var n = 0; n < numSides; n++) {
+            for (var n = 0; n < numSides - 1; n++) {
                 faces.push([
                     (n % numSides) + numSides,
                     n,
@@ -920,13 +930,19 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             }
             var prism = new BABYLON.MeshBuilder.CreatePolyhedron(
                 'prism',
-                { custom: { vertex: vertices, face: faces } }
+                {
+                    custom: { vertex: vertices, face: faces },
+                    sideOrientation: BABYLON.Mesh.DOUBLESIDE
+                }
             );
             prism.material = BeetleController.Cache.getMaterial(
                 this.wings.material.diffuseColor
             );
+            prism.material.backFaceCulling = false;
             prism.material.wireframe = this.controller.wireframeEnabled;
             prism.visibility = this.controller.ghostModeEnabled ? .25 : 1
+            prism.convertToFlatShadedMesh();
+
             this.controller.beetleTrails.push(prism);
         }
         this.lastTransformMatrix = currentTransformMatrix.clone();
