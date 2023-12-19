@@ -633,16 +633,16 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleExtrusionBase = function () {
-    this.controller.beetle.extrusionShapeMesh.enabled =
-        !this.controller.beetle.extrusionShapeMesh.enabled;
-    this.controller.beetle.extrusionShapeMesh.visibility = 
-        (this.controller.beetle.extrusionShapeMesh.enabled &&
+    this.controller.beetle.extrusionShapeOutline.enabled =
+        !this.controller.beetle.extrusionShapeOutline.enabled;
+    this.controller.beetle.extrusionShapeOutline.visibility =
+        (this.controller.beetle.extrusionShapeOutline.enabled &&
             this.controller.beetle.extruding) ? 1 : 0;
     this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.extrusionBaseEnabled = function () {
-    return this.controller.beetle.extrusionShapeMesh.enabled;
+    return this.controller.beetle.extrusionShapeOutline.enabled;
 };
 
 BeetleDialogMorph.prototype.toggleWireframe = function () {
@@ -721,9 +721,9 @@ Beetle.prototype.init = function (controller) {
     this.extruding = false;
     this.extrusionShapeSelector = 'circle';
     this.extrusionShape = null;
-    this.extrusionShapeMesh = null;
-    this.updateExtrusionShapeMesh();
-    this.extrusionShapeMesh.enabled = true;
+    this.extrusionShapeOutline = null;
+    this.updateExtrusionShapeOutline();
+    this.extrusionShapeOutline.enabled = true;
     this.lastTransformMatrix = null;
 
     this.controller.changed();
@@ -755,7 +755,11 @@ Beetle.prototype.setColor = function (color) {
     this.wings.material.diffuseColor =
         new BABYLON.Color3(color.r / 255, color.g / 255, color.b / 255);
 
-    this.updateExtrusionShapeMeshColor();
+    // any further extrusion will have to be a new mesh because of the new color
+    if (this.extruding) {
+        this.stopExtruding();
+        this.extrudeToCurrentPoint();
+    }
 
     this.controller.changed();
 };
@@ -840,41 +844,26 @@ Beetle.prototype.newExtrusionShape = function (selector) {
     return path;
 };
 
-Beetle.prototype.updateExtrusionShapeMesh = function () {
-    if (this.extrusionShapeMesh) {
-        this.controller.scene.removeMesh(this.extrusionShapeMesh);
+Beetle.prototype.updateExtrusionShapeOutline = function () {
+    if (this.extrusionShapeOutline) {
+        this.controller.scene.removeMesh(this.extrusionShapeOutline);
     }
     this.extrusionShape = this.newExtrusionShape(this.extrusionShapeSelector);
     if (this.extrusionShape.length > 2) {
-        // not extruding points, let's build a polygon
-        this.extrusionShapeMesh = BABYLON.MeshBuilder.CreatePolygon(
+        // not extruding points, let's draw a shape outline
+        this.extrusionShapeOutline = BABYLON.MeshBuilder.CreateLines(
             'extrusionShape',
             {
-                shape: this.extrusionShape,
-                sideOrientation: BABYLON.Mesh.DOUBLESIDE
+                points: this.extrusionShape,
+                useVertexAlpha: false
             },
             this.controller.scene
         );
-        this.extrusionShapeMesh.parent = this.body;
-        this.extrusionShapeMesh.scalingDeterminant = this.multiplierScale;
-        this.extrusionShapeMesh.rotate(BABYLON.Axis.X, Math.PI / -2);
-        this.updateExtrusionShapeMeshColor();
+        this.extrusionShapeOutline.parent = this.body;
+        this.extrusionShapeOutline.scalingDeterminant = this.multiplierScale;
+        this.extrusionShapeOutline.rotate(BABYLON.Axis.X, Math.PI / -2);
     }
-    this.controller.changed();
-};
-
-Beetle.prototype.updateExtrusionShapeMeshColor = function () {
-    // any further extrusion will have to be a new mesh because of the new color
-    if (this.extruding) {
-        this.stopExtruding();
-        this.extrudeToCurrentPoint();
-        this.extrusionShapeMesh.visibility = 1;
-    } else {
-        this.extrusionShapeMesh.visibility = 0;
-    }
-    if (this.extrusionShapeMesh && this.wings?.material) {
-        this.extrusionShapeMesh.material = this.wings.material;
-    }
+    this.extrusionShapeOutline.visibility = this.extruding ? 1 : 0;
     this.controller.changed();
 };
 
@@ -890,13 +879,12 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             },
             this.controller.scene
         );
-        this.extrusionMesh.color =
-            this.wings.material.diffuseColor.clone()
+        this.extrusionMesh.color = this.wings.material.diffuseColor.clone()
     } else {
         // extrude a polygon
         var currentTransformMatrix =
-                this.extrusionShapeMesh.computeWorldMatrix(true);
-        this.extrusionShapeMesh.visibility = 1;
+                this.extrusionShapeOutline.computeWorldMatrix(true);
+        this.extrusionShapeOutline.visibility = 1;
         if (this.lastTransformMatrix) {
             var backFace =
                 this.extrusionShape.map(
@@ -935,12 +923,10 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
                 { custom: { vertex: vertices, face: faces } }
             );
             prism.material = BeetleController.Cache.getMaterial(
-                this.extrusionShapeMesh.material.diffuseColor
+                this.wings.material.diffuseColor
             );
-            prism.material.wireframe =
-                this.controller.wireframeEnabled;
-            prism.visibility =
-                this.controller.ghostModeEnabled ? .25 : 1
+            prism.material.wireframe = this.controller.wireframeEnabled;
+            prism.visibility = this.controller.ghostModeEnabled ? .25 : 1
             this.controller.beetleTrails.push(prism);
         }
         this.lastTransformMatrix = currentTransformMatrix.clone();
@@ -951,20 +937,20 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
     this.lastTransformMatrix = null;
-    this.extrusionShapeMesh.visibility = 0;
+    this.extrusionShapeOutline.visibility = 0;
     this.controller.changed();
 };
 
 Beetle.prototype.show = function () {
-    var extrusionMeshVisibility = this.extrusionShapeMesh.visibility;
+    var extrusionMeshVisibility = this.extrusionShapeOutline.visibility;
     this.body.getChildren().forEach(mesh => mesh.visibility = 1);
-    this.extrusionShapeMesh.visibility = extrusionMeshVisibility;
+    this.extrusionShapeOutline.visibility = extrusionMeshVisibility;
 };
 
 Beetle.prototype.hide = function () {
-    var extrusionMeshVisibility = this.extrusionShapeMesh.visibility;
+    var extrusionMeshVisibility = this.extrusionShapeOutline.visibility;
     this.body.getChildren().forEach(mesh => mesh.visibility = 0);
-    this.extrusionShapeMesh.visibility = extrusionMeshVisibility;
+    this.extrusionShapeOutline.visibility = extrusionMeshVisibility;
 };
 
 Beetle.prototype.isVisible = function () {
@@ -1045,7 +1031,7 @@ Beetle.prototype.pointTo = function (x, y, z) {
 
 Beetle.prototype.setScale = function (scale) {
     this.multiplierScale = scale;
-    this.updateExtrusionShapeMesh();
+    this.updateExtrusionShapeOutline();
 };
 
 
@@ -1125,7 +1111,7 @@ SnapExtensions.primitives.set('bb_setextrusionbase(base)', function (base) {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
     stage.beetleController.beetle.extrusionShapeSelector = base;
-    stage.beetleController.beetle.updateExtrusionShapeMesh();
+    stage.beetleController.beetle.updateExtrusionShapeOutline();
 });
 
 SnapExtensions.primitives.set('bb_startextruding()', function () {
