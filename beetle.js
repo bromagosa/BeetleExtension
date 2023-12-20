@@ -196,9 +196,11 @@ BABYLON.ArcRotateCamera.prototype.setFPV = function (setIt) {
         this.target = new BABYLON.Vector3(0,0,0);
         this.lowerRadiusLimit = 0.5;
         this.radius = 0.5;
+        this.light.specular = new BABYLON.Color3.Black;
         this.controller.changed();
     } else {
         this.parent = null;
+        this.light.specular = new BABYLON.Color3.White;
         this.reset();
         this.restoreViewpoint();
     }
@@ -226,19 +228,27 @@ BABYLON.ArcRotateCamera.prototype.restoreViewpoint = function () {
 };
 
 BeetleController.prototype.initLights = function () {
-    this.light = new BABYLON.HemisphericLight(
-        'ambientLight',
+    this.topLight = new BABYLON.HemisphericLight(
+        'topLight',
         new BABYLON.Vector3(0, 1, 0),
         this.scene
     );
-    /*
+    this.topLight.specular = new BABYLON.Color3.Black; // no reflections
+
+    this.bottomLight = new BABYLON.HemisphericLight(
+        'bottomLight',
+        new BABYLON.Vector3(0, -1, 0),
+        this.scene
+    );
+    this.bottomLight.specular = new BABYLON.Color3.Black; // no reflections
+
     this.camera.light = new BABYLON.PointLight(
         'pointLight',
         this.camera.position,
         this.scene
     );
+    this.camera.light.specular = new BABYLON.Color3.White;
     this.camera.light.parent = this.camera;
-    */
 };
 
 BeetleController.prototype.initGrid = function () {
@@ -938,10 +948,9 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             prism.material = BeetleController.Cache.getMaterial(
                 this.wings.material.diffuseColor
             );
-            prism.material.backFaceCulling = false;
+            prism.material.backFaceCulling = true;
             prism.material.wireframe = this.controller.wireframeEnabled;
             prism.visibility = this.controller.ghostModeEnabled ? .25 : 1
-            prism.convertToFlatShadedMesh();
 
             this.controller.beetleTrails.push(prism);
         }
