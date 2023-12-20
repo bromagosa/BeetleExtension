@@ -731,6 +731,7 @@ Beetle.prototype.init = function (controller) {
     // extrusion
     this.extruding = false;
     this.extrusionShapeSelector = 'circle';
+    this.lineTrail = null;
     this.extrusionShape = null;
     this.extrusionShapeOutline = null;
     this.updateExtrusionShapeOutline();
@@ -880,19 +881,29 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
     this.extrusionShapeOutline.visibility = this.extruding ? 1 : 0;
     this.controller.changed();
 };
+
 Beetle.prototype.extrudeToCurrentPoint = function () {
     this.extruding = true;
     if (this.extrusionShape.length === 1) {
         // draw a line
-        this.extrusionMesh = BABYLON.MeshBuilder.CreateLines(
-            'lines',
+        var points = [];
+        if (this.lineTrail) {
+            points = this.lineTrail.points;
+            this.lineTrail.dispose();
+            this.controller.beetleTrails.pop();
+        }
+        points.push(this.body.position.clone());
+        this.lineTrail = BABYLON.MeshBuilder.CreateLines(
+            'lineTrail',
             {
-                points: this.extrusionPoints,
-                useVertexAlpha: false
+                points: points,
+                useVertexAlpha: false,
             },
             this.controller.scene
         );
-        this.extrusionMesh.color = this.wings.material.diffuseColor.clone()
+        this.lineTrail.color = this.wings.material.diffuseColor.clone();
+        this.lineTrail.points = points;
+        this.controller.beetleTrails.push(this.lineTrail);
     } else {
         // extrude a polygon
         var currentTransformMatrix =
@@ -963,19 +974,20 @@ Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
     this.lastTransformMatrix = null;
     this.extrusionShapeOutline.visibility = 0;
+    this.lineTrail = null;
     this.controller.changed();
 };
 
 Beetle.prototype.show = function () {
-    var extrusionMeshVisibility = this.extrusionShapeOutline.visibility;
+    var extrusionShapeOutlineVisibility = this.extrusionShapeOutline.visibility;
     this.body.getChildren().forEach(mesh => mesh.visibility = 1);
-    this.extrusionShapeOutline.visibility = extrusionMeshVisibility;
+    this.extrusionShapeOutline.visibility = extrusionShapeOutlineVisibility;
 };
 
 Beetle.prototype.hide = function () {
-    var extrusionMeshVisibility = this.extrusionShapeOutline.visibility;
+    var extrusionShapeOutlineVisibility = this.extrusionShapeOutline.visibility;
     this.body.getChildren().forEach(mesh => mesh.visibility = 0);
-    this.extrusionShapeOutline.visibility = extrusionMeshVisibility;
+    this.extrusionShapeOutline.visibility = extrusionShapeOutlineVisibility;
 };
 
 Beetle.prototype.isVisible = function () {
