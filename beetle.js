@@ -53,9 +53,10 @@ BeetleController.prototype.init = function (stage) {
     this.wireframeEnabled = false;
 
     this.shouldRerender = false;
-
     this.renderWidth = 480;
     this.renderHeight = 360;
+
+    this.fullScreenMode = false;
 
     this.initCanvas();
     this.initEngine();
@@ -282,7 +283,11 @@ BeetleController.prototype.changed = function () {
 BeetleController.prototype.render = function () {
     if (this.scene && this.shouldRerender || this.camera.isMoving()) {
         this.scene.render();
-        this.dialog.changed();
+        if (this.fullScreenMode) {
+            world.changed()
+        } else {
+            this.dialog.changed();
+        }
         this.shouldRerender = false;
     }
 };
@@ -451,7 +456,55 @@ BeetleDialogMorph.prototype.initRenderView = function () {
         );
     };
 
+    this.fullScreenButton = new PushButtonMorph(
+        this,
+        'toggleFullScreen',
+        new SymbolMorph('fullScreen', 14)
+    );
+
+    this.renderView.add(this.fullScreenButton);
+    this.fullScreenButton.setRight(this.renderView.right() - 2);
+    this.fullScreenButton.setTop(this.renderView.top() + 2);
+    this.fullScreenButton.alpha = 0.5;
+
     this.renderView.step = function () { controller.render(); };
+};
+
+BeetleDialogMorph.prototype.toggleFullScreen = function () {
+    this.controller.fullScreenMode = !this.controller.fullScreenMode;
+
+    if (this.controller.fullScreenMode) {
+        this.body.removeChild(this.renderView);
+        world.add(this.renderView);
+
+        this.renderView.setLeft(0);
+        this.renderView.setTop(0);
+
+        this.controller.renderWidth = world.width();
+        this.controller.renderHeight = world.height();
+    } else {
+        world.removeChild(this.renderView);
+        this.body.add(this.renderView);
+
+        this.renderView.setLeft(this.body.left());
+        this.renderView.setTop(this.body.top());
+
+        this.controller.renderWidth = 480;
+        this.controller.renderHeight = 360;
+    }
+
+    this.controller.glCanvas.width = this.controller.renderWidth;
+    this.controller.glCanvas.height = this.controller.renderHeight;
+    this.renderView.setExtent(
+        new Point(
+            this.controller.renderWidth,
+            this.controller.renderHeight
+        )
+    );
+    this.fullScreenButton.setRight(this.renderView.right() - 2);
+    this.fullScreenButton.setTop(this.renderView.top() + 2);
+
+    this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.initControlPanel = function () {
