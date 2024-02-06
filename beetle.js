@@ -471,6 +471,7 @@ BeetleDialogMorph.prototype.initRenderView = function () {
 };
 
 BeetleDialogMorph.prototype.toggleFullScreen = function () {
+    var myself = this;
     this.controller.fullScreenMode = !this.controller.fullScreenMode;
 
     if (this.controller.fullScreenMode) {
@@ -482,6 +483,18 @@ BeetleDialogMorph.prototype.toggleFullScreen = function () {
 
         this.controller.renderWidth = world.width();
         this.controller.renderHeight = world.height();
+
+        this.renderView.reactToWorldResize = function (rect) {
+            myself.controller.renderWidth = rect.width();
+            myself.controller.renderHeight = rect.height();
+            myself.controller.engine.setSize(rect.width(), rect.height());
+            this.changed();
+            this.bounds = rect;
+            myself.controller.changed();
+            myself.fullScreenButton.setRight(rect.right() - 2);
+            myself.fullScreenButton.setTop(rect.top() + 2);
+        };
+
     } else {
         world.removeChild(this.renderView);
         this.body.add(this.renderView);
