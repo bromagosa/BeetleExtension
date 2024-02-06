@@ -456,10 +456,15 @@ BeetleDialogMorph.prototype.initRenderView = function () {
         );
     };
 
-    this.fullScreenButton = new PushButtonMorph(
+    this.fullScreenButton = new ToggleButtonMorph(
+        null,
         this,
         'toggleFullScreen',
-        new SymbolMorph('fullScreen', 14)
+        [
+            new SymbolMorph('fullScreen', 14),
+            new SymbolMorph('normalScreen', 14)
+        ],
+        () => this.controller.fullScreenMode // query
     );
 
     this.renderView.add(this.fullScreenButton);
