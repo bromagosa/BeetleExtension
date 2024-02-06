@@ -350,6 +350,8 @@ BeetleController.prototype.currentView = function () {
         this.stage.newCostumeName(localize('render'))
     );
 
+    costume.shrinkWrap();
+
     if (wasShowingAxes) { this.dialog.toggleAxes(); }
     if (wasShowingBeetle) { this.dialog.toggleBeetle(); }
     if (wasShowingGrid) { this.dialog.toggleGrid(); }
