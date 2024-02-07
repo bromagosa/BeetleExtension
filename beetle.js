@@ -1100,10 +1100,26 @@ Beetle.prototype.getPosition = function () {
 };
 
 Beetle.prototype.setRotations = function (x, y, z) {
+    var oldRotation;
+    if (this.body.rotationQuaternion) {
+        oldRotation = this.body.rotationQuaternion.toEulerAngles();
+    }
     this.body.rotationQuaternion = null;
-    if (x !== '') { this.body.rotation.z = radians(Number(x)); }
-    if (y !== '') { this.body.rotation.x = radians(Number(y) * -1); }
-    if (z !== '') { this.body.rotation.y = radians(Number(z) * -1); }
+    if (x !== '') {
+        this.body.rotation.z = radians(Number(x));
+    } else if (oldRotation) {
+        this.body.rotation.z = oldRotation.z;
+    }
+    if (y !== '') {
+        this.body.rotation.x = radians(Number(y) * -1);
+    } else if (oldRotation) {
+        this.body.rotation.x = oldRotation.x;
+    }
+    if (z !== '') {
+        this.body.rotation.y = radians(Number(z) * -1);
+    } else if (oldRotation) {
+        this.body.rotation.y = oldRotation.y;
+    }
     this.body.rotationQuaternion = this.body.rotation.toQuaternion();
     this.controller.changed();
 };
