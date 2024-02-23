@@ -1,6 +1,6 @@
 # 3D Beetle Extension
 ## A Tiny Bit of History
-The 3D Beetle extension is heavily inspired in [Beetle Blocks](http://beetleblocks.com) Snap*!* mod, orignally designed by Eric Rosenbaum and Duks Koschitz and developed by Bernat Romagosa during the years 2014-2020.
+The 3D Beetle extension is heavily inspired in [Beetle Blocks](http://beetleblocks.com) Snap<em>!</em> mod, orignally designed by Eric Rosenbaum and Duks Koschitz and developed by Bernat Romagosa during the years 2014-2020.
 
 Beetle Blocks was aimed at 3D fabrication, especially targetting 3D printing, which is why the 3D Beetle extension also allows exporting the generated geometry for 3D printing.
 
@@ -23,7 +23,7 @@ This character is to 3D what the Lego turtle is to 2D. Turtles can move on a 2D 
 
 ### Movement and Rotation
 
-You can **move** and **rotate** the Beetle by using its particular movement and rotation blocks. These work very much like the usual *Motion* blocks in Snap*!*, but the extra Z axis makes things slightly more complicated.
+You can **move** and **rotate** the Beetle by using its particular movement and rotation blocks. These work very much like the usual *Motion* blocks in Snap<em>!</em>, but the extra Z axis makes things slightly more complicated.
 
 ![The movement and rotation axes](axes.png)
 
@@ -186,31 +186,46 @@ This can be easily achieved by passing in a list of three points that describe a
 
 ![](proper_cone.png)
 
-A different way to think of a cone is a circular extrusion that scales up from size zero to size one.
+A different way to think of a cone is a circular extrusion that scales down into a point while being extruded.
 
-In the 3D Beetle extension, the global scale affects both the size of your extrusion shapes and the distance of movement of the beetle. For this reason, if you try to move when you've set the scale to zero you'll find out that the beetle doesn't move at all. That's why you need to start from a scale zero, then set it to one, and then move.
+The 3D Beetle extension provides a block that lets you change the scale of the extrusion base, as well as the scale of the movement of the beetle.
+
+To make a cone, you can start by extruding a 0-step circle, then setting the shape scale to zero, then moving as many steps as deep you want your cone to be.
 
 ![](scaled_cone.png)
 
-### Pyramid
+### Staired Pyramid
 
 A pyramid can also be thought of in different ways. An obvious one is to stack a bunch of flat square boxes one on top of the other in decreasing sizes.
 
 ![](pyramid_sketch.png)
 
-To achieve this in the 3D Beetle extension you can again make use of the global scale. Is is important to remember that scale affects both the size of your extrusions and the distance of your movements. That is, with a scale of `0.5`, your shapes are going to be half as big, and the Beetle is also going to move half the distance you ask it to.
+To achieve this in the 3D Beetle extension you can again make use of the shape scale.
 
-![](log_pyramid.png)
+![](pyramid.png)
 
-Notice how, in this attempt, each pyramid floor becomes flatter and flatter. To compensate against the scale affecting the Beetle movement, you need to make it dependant of the scale.
+Notice how, for each floor, you first need to create a zero-length extrusion. Otherwise, your pyramid would lack any stairs.
 
-![](linear_pyramid.png)
-
-Another way to think of a pyramid is as a skewed extrusion of a stairwell. For each corner, the Beetle needs to rotate 90º and set an extrusion step by moving zero steps. Here the trick is to find an elegant way to generate the stairwell.
+Another way to think of a pyramid is as a skewed extrusion of a stairwell. For each corner, the Beetle needs to rotate 90º and set an extrusion step by moving zero steps.
 
 ![](crude_stairwell_pyramid.png)
 
-Of course, generating the stairwell by hand is going to be a very tedious job if you want the pyramid to have an arbitrary number of floors.
+Of course, listing all the points for the stairwell by hand is going to be a very tedious job if you want the pyramid to have any more floors.
+
+A rather cumbersome loop could do the trick, but there are more elegant ways to generate the stairwell. This is where mixing the 3D world of the beetle and the 2D world of Snap<em>!</em> shines. We can just tell a sprite to walk in a stair pattern using regular turtle geometry, and store the sprite position at each of the steps.
+
+For clarity, you could get the sprite to draw the stairwell on the stage so you can see what the profile will look like. Notice how it's important to not close the shape if you don't want to end up with unwanted internal faces, while it's also important to add a horizontal line at the bottom if you want the pyramid to have a bottom face.
+
+![](stair_turtle.png)
+
+Now you don't need the pen code anymore. You can just create a temporary variable and push all the positions into it, then use it as the base shape of your extrusion. While you're at it, you can make the movement steps smaller else you end up with a real-sized pyramid!
+
+![](stairwell_base.png)
+
+The same code from before will now generate a ten-story pyramid.
+
+![](ten_story_pyramid.png)
+
 
 ## Advanced Examples
 
