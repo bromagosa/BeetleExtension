@@ -805,6 +805,7 @@ Beetle.prototype.init = function (controller) {
 
     // extrusion
     this.extruding = false;
+    this.extruded = false;
     this.extrusionShapeSelector = 'circle';
     this.lineTrail = null;
     this.extrusionShape = null;
@@ -979,6 +980,12 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
     this.extrusionShapeOutline.visibility =
         this.extruding && this.extrusionBaseEnabled ? 1 : 0;
     this.controller.changed();
+    if (this.lastTransformMatrix && !this.extruded) {
+        // do this only when we've started extruding and NOT created any prisms
+        // yet
+        this.lastTransformMatrix =
+            this.extrusionShapeOutline.computeWorldMatrix(true).clone();
+    }
 };
 
 Beetle.prototype.extrudeToCurrentPoint = function () {
@@ -1055,6 +1062,7 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
             prism.convertToFlatShadedMesh();
 
             this.controller.beetleTrails.push(prism);
+            this.extruded = true;
 
             if (this.extrusionShape[0].equalsWithEpsilon(
                     this.extrusionShape[this.extrusionShape.length - 1],
@@ -1126,6 +1134,7 @@ Beetle.prototype.computeExtrusionCaps = function (currentTransformMatrix) {
 
 Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
+    this.extruded = false;
     this.lastTransformMatrix = null;
     this.lastCap = null;
     this.extrusionShapeOutline.visibility = 0;
