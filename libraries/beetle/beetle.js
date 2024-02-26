@@ -718,16 +718,16 @@ BeetleDialogMorph.prototype.beetleEnabled = function () {
 };
 
 BeetleDialogMorph.prototype.toggleExtrusionBase = function () {
-    this.controller.beetle.extrusionShapeOutline.enabled =
-        !this.controller.beetle.extrusionShapeOutline.enabled;
+    this.controller.beetle.extrusionBaseEnabled =
+        !this.controller.beetle.extrusionBaseEnabled;
     this.controller.beetle.extrusionShapeOutline.visibility =
-        (this.controller.beetle.extrusionShapeOutline.enabled &&
+        (this.controller.beetle.extrusionBaseEnabled &&
             this.controller.beetle.extruding) ? 1 : 0;
     this.controller.changed();
 };
 
 BeetleDialogMorph.prototype.extrusionBaseEnabled = function () {
-    return this.controller.beetle.extrusionShapeOutline.enabled;
+    return this.controller.beetle.extrusionBaseEnabled;
 };
 
 BeetleDialogMorph.prototype.toggleWireframe = function () {
@@ -809,8 +809,8 @@ Beetle.prototype.init = function (controller) {
     this.lineTrail = null;
     this.extrusionShape = null;
     this.extrusionShapeOutline = null;
+    this.extrusionBaseEnabled = true;
     this.updateExtrusionShapeOutline();
-    this.extrusionShapeOutline.enabled = true;
     this.lastTransformMatrix = null;
     this.lastCap = null;
 
@@ -976,7 +976,8 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
         this.extrusionShapeOutline.scalingDeterminant = this.shapeScale;
         this.extrusionShapeOutline.rotate(BABYLON.Axis.X, Math.PI / -2);
     }
-    this.extrusionShapeOutline.visibility = this.extruding ? 1 : 0;
+    this.extrusionShapeOutline.visibility =
+        this.extruding && this.extrusionBaseEnabled ? 1 : 0;
     this.controller.changed();
 };
 
@@ -1006,7 +1007,8 @@ Beetle.prototype.extrudeToCurrentPoint = function () {
         // extrude a polygon
         var currentTransformMatrix =
                 this.extrusionShapeOutline.computeWorldMatrix(true);
-        this.extrusionShapeOutline.visibility = 1;
+        this.extrusionShapeOutline.visibility =
+            this.extrusionBaseEnabled ? 1 : 0;
         if (this.lastTransformMatrix) {
             var backFace =
                 this.extrusionShape.map(
