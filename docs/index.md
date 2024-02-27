@@ -22,8 +22,8 @@ identically, and the coordinate system has also been preserved.
 Additionally, the 3D Beetle extension provides a few extra operations and
 features that you will easily adapt to.
 
-You can refer to the blocks reference at the end of this article to learn what
-every single block does.
+You can refer to the [blocks reference](#all-blocks-described) at the end of
+this article to learn what every single block does.
 
 ## Overview and Abstractions
 
@@ -32,7 +32,7 @@ every single block does.
 The Beetle is a character that can move around 3D space. Here's what it looks
 like in its default color:
 
-![beetle](beetle.png)
+> ![beetle](beetle.png)
 
 This character is to 3D what the Lego turtle is to 2D. Turtles can move on a 2D
 plane, but beetles can additionally fly and dig underground, which makes them
@@ -44,7 +44,7 @@ You can **move** and **rotate** the Beetle by using its particular movement and
 rotation blocks. These work very much like the usual *Motion* blocks in
 Snap<em>!</em>, but the extra Z axis makes things slightly more complicated.
 
-![The movement and rotation axes](axes.png)
+> ![The movement and rotation axes](axes.png)
 
 You can always look at the three axes of rotation -X (blue), Y (red) and Z
 (green)- to determine what your rotation or movement operation will have the
@@ -57,13 +57,13 @@ we call **extrusion**. Extruding is leaving a 3D trail along a path. Think of it
 as if the Beetle was carrying a pastry tube, or one of these play dough
 extruders, with interchangeable headers.
 
-![The beetle and its movement and rotation axes](playdough_extruder.png)
+> ![The beetle and its movement and rotation axes](playdough_extruder.png)
 
 #### Extruding a Point
 
 Extruding a single point will generate a line.
 
-![The beetle has extruded a line along a path](line_extrusion.png)
+> ![The beetle has extruded a line along a path](line_extrusion.png)
 
 The ![](start_extruding_block.png) block includes an option in the dropdown menu
 for a point, centered right at the center of the beetle.
@@ -73,7 +73,7 @@ for a point, centered right at the center of the beetle.
 Similarly, extruding a curve will generate a surface. A curve is any collection
 of points in a 2D plane that don't define a closed polygon.
 
-![The beetle has extruded a curve along a path](curve_extrusion.png)
+> ![The beetle has extruded a curve along a path](curve_extrusion.png)
 
 The ![](start_extruding_block.png) block includes default options in the
 dropdown menu for two different curves: semicircle and line. If you want to
@@ -82,7 +82,7 @@ points to the block:
 
 ![](start_extruding_point_collection.png)
 
-![The beetle has extruded a curve along a path](custom_curve_extrusion.png)
+> ![The beetle has extruded a curve along a path](custom_curve_extrusion.png)
 
 #### Extruding a Polygon
 
@@ -90,7 +90,7 @@ When extruding a polygon, the Beetle will generate a new prism at each movement
 step, with its base shaped as said polygon and with the end cap matching the
 current beetle rotation.
 
-![The beetle has extruded a square along a path](square_extrusion.png)
+> ![The beetle has extruded a square along a path](square_extrusion.png)
 
 The ![](start_extruding_block.png) block includes default options in the
 dropdown menu for three different polygons: circle, triangle and square. If you
@@ -101,7 +101,7 @@ shape:
 
 ![](start_extruding_custom_polygon.png)
 
-![The beetle has extruded a truncated triangle along a
+> ![The beetle has extruded a truncated triangle along a
 path](custom_polygon_extrusion.png)
 
 # Examples
@@ -126,7 +126,7 @@ original position.
 A cube can be understood as an extrusion of a square. Let's begin by selecting
 the correct extrusion base from the dropdown menu in the following block:
 
-> ![](start_extruding_square_block.png)
+![](start_extruding_square_block.png)
 
 You'll notice that the Beetle is now showing that shape around its body.
 
@@ -155,19 +155,21 @@ a smaller circular hole in the middle, which is not permitted.
 One way to achieve a tube is to extrude a line around a circular path, thus
 generating the walls of the cylinder one by one as the beetle walks in a circle:
 
-![](tube.gif) ![](tube_code.png)
+> ![](tube.gif)
+
+> ![](tube_code.png)
 
 To change the height of the tube you will need to specify a custom line to
 extrude:
 
-![](long_tube_code.png)
+> ![](long_tube_code.png)
 
 ### Tube with Thick Walls
 
 The previous tube has walls of zero thickness. An easy way to achieve a thick
 wall is to extrude a custom rectangle along a circular path:
 
-![](thick_glitched_tube_code.png)
+> ![](thick_glitched_tube_code.png)
 
 Notice how the tube presents a little glitch. The last extrusion step didn't
 quite close the walls as you may have expected. That is because the extrusion
@@ -178,7 +180,7 @@ started from.
 One simple solution is to perform an extra extrusion by asking the beetle to
 move zero steps after the loop:
 
-![](thick_tube_code.png)
+> ![](thick_tube_code.png)
 
 ### Sphere
 
@@ -188,7 +190,7 @@ easily.
 For example, revolving around a center point while extruding a circle will
 generate a sphere.
 
-![](sphere.png)
+> ![](sphere.png)
 
 However, the internal geometry of this sphere is a bit wrong. The Beetle
 extension does its best to guess what you meant, but some 3D experts will frown
@@ -199,28 +201,28 @@ light of day.
 Both the wireframe and ghost mode toggles can help you visualize what your
 geometry really looks like.
 
-![](sphere_wireframe.png)
+> ![](sphere_wireframe.png)
 
 Most 3D software will take this sphere without flinching, but others will
 complain that the geometry is not correct and show it to you like it really is:
 
-![](cura_errors.png) ![](meshlab_errors.png)
+> ![](cura_errors.png) ![](meshlab_errors.png)
 
 ### Sphere with Proper Geometry
 
 The proper way to make a sphere is to revolve an open semicircle so that only
 the outer shell is generated, and with its facets always facing the correct way.
 
-![](proper_sphere.png)
+> ![](proper_sphere.png)
 
 The geometry now looks perfectly fine in wireframe mode.
 
-![](proper_sphere_wireframe.png)
+> ![](proper_sphere_wireframe.png)
 
 Additionally, all 3D software renders it properly with no complaints about
 reverse facets or internal faces.
 
-![](cura_ok.png) ![](meshlab_ok.png)
+> ![](cura_ok.png) ![](meshlab_ok.png)
 
 ### Cone
 
@@ -228,12 +230,12 @@ A cone can be understood as a revolution of a triangle. You could, thus, extrude
 a triangle while turning around the Z axis and moving zero steps at each
 rotation.
 
-![](cone.png)
+> ![](cone.png)
 
 However, similarly to what happened with the sphere example, the resulting shape
 will be frowned upon by some 3D software:
 
-![](meshlab_errors_cone.png)
+> ![](meshlab_errors_cone.png)
 
 Just like before, the culprits are some of the faces that have ended up
 inside-out.
@@ -242,13 +244,13 @@ inside-out.
 
 To get a proper cone we will have to revolve two lines forming an acute angle.
 
-![](angle_revolution.png)
+> ![](angle_revolution.png)
 
 This can be easily achieved by passing in a list of three points that describe
 an acute angle to the ![](start_extruding_block.png) block. This will also let
 us change the radius and height of the cone rather easily.
 
-![](proper_cone.png)
+> ![](proper_cone.png)
 
 A different way to think of a cone is as a circular extrusion that scales down
 into a point while being extruded.
@@ -259,19 +261,19 @@ extrusion base, as well as the scale of the movement of the beetle.
 To make a cone, you can start by extruding a 0-step circle, then setting the
 shape scale to zero, then moving as many steps as deep you want your cone to be.
 
-![](scaled_cone.png)
+> ![](scaled_cone.png)
 
 ### Staired Pyramid
 
 A pyramid can also be thought of in different ways. An obvious one is to stack a
 bunch of flat square boxes one on top of the other in decreasing sizes.
 
-![](pyramid_sketch.png)
+> ![](pyramid_sketch.png)
 
 To achieve this in the 3D Beetle extension you can again make use of the shape
 scale.
 
-![](pyramid.png)
+> ![](pyramid.png)
 
 Notice how, for each floor, you first need to create a zero-length extrusion.
 Otherwise, your pyramid would lack any stairs.
@@ -280,7 +282,7 @@ Another way to think of a pyramid is as a four-stepped revolution of a
 stairwell. For each corner, the Beetle needs to rotate 90º and set an extrusion
 step by moving zero steps.
 
-![](crude_stairwell_pyramid.png)
+> ![](crude_stairwell_pyramid.png)
 
 Of course, listing all the points for the stairwell by hand is going to be a
 very tedious job if you want the pyramid to have any more floors.
@@ -297,18 +299,18 @@ the shape if you don't want to end up with unwanted internal faces, while it's
 also important to add a horizontal line at the bottom if you want the pyramid to
 have a bottom face.
 
-![](stair_turtle.png)
+> ![](stair_turtle.png)
 
 Now you don't need the pen code anymore. You can just create a temporary
 variable and push all the positions into it, then use it as the base shape of
 your extrusion. While you're at it, you can make the movement steps smaller else
 you end up with a real-sized pyramid!
 
-![](stairwell_base.png)
+> ![](stairwell_base.png)
 
 The same code from before will now generate a ten-story pyramid.
 
-![](ten_story_pyramid.png)
+> ![](ten_story_pyramid.png)
 
 
 ## Advanced Examples
@@ -318,7 +320,7 @@ The same code from before will now generate a ten-story pyramid.
 This is a classic example brought straight from Beetle Blocks. You begin by
 making a torus, or a doughnut, with a circular extrusion.
 
-![](torus.png)
+> ![](torus.png)
 
 Wrapping the torus in another loop that rotates around another axis will create
 a doubly looped shape. 1Note that this operation can get rather slow on some
@@ -327,22 +329,24 @@ browsers.
 If you perform the secondary rotation on the y axis (up/down, or pitch) you will
 end up with a sort of yarn ball.
 
-![](yarn_ball.png)
+> ![](yarn_ball.png)
 
 But performing the secondary rotation on the x axis
 (clockwise/counter-clockwise, or roll) will yield a torus of toruses.
 
-![](supertorus.png)
+> ![](supertorus.png)
 
 If you now increase the scale of both movement and shape by a little factor
-after each inner torus, you'll end up with a shape ressembling a snail shell.
+after each inner torus, you'll end up with a shape resembling a snail shell.
 
-![](snail.png)
+> ![](snail.png)
+
+> ![](printing_snail.png)
 
 Of course, nothing stops you from making it more pleasing to the eye by playing
 a little bit with the pen color.
 
-![](color_snail.png)
+> ![](color_snail.png)
 
 ### Pine Tree
 
@@ -354,13 +358,13 @@ tree.
 While this is a valid exercise, it is also interesting to generate the tree in a
 different way by revolving a 2D zig-zag pattern.
 
-![](tree.png)
+> ![](tree.png)
 
 A similar tree can be generated by extruding a succession of smaller and smaller
 rather flat cones. This method will also allow you to tweak the color of each
 floor independently.
 
-![](tree_cones.png)
+> ![](tree_cones.png)
 
 ## Fractals
 
@@ -378,7 +382,7 @@ floor independently.
 
 ## All Blocks Described
 
-| Block | Description |
+| | |
 |--|--|
 | ![](blocks/reset.png) | Erases all 3D geometry and takes the Beetle back to its original position and orientation. It also erases the position and rotation stack (see push/pop position blocks). It does keep the current Beetle color. |
 | ![](blocks/go_home.png) | Takes the Beetle back to its original position and orientation. |
