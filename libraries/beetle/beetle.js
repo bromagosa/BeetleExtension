@@ -1026,27 +1026,32 @@ Beetle.prototype.extrudePoint = function () {
 };
 
 Beetle.prototype.extrudePolygon = function () {
-    // to extrude a polygon is to build a prism
+    // to extrude a polygon is to build a prism or a surface, depending on
+    // whether the polygon is closed
     var currentTransformMatrix =
         this.extrusionShapeOutline.computeWorldMatrix(true);
     this.extrusionShapeOutline.visibility =
         this.extrusionBaseEnabled ? 1 : 0;
     if (this.lastTransformMatrix) {
-        var backFace =
-            this.extrusionShape.map(
-                v =>
-                BABYLON.Vector3.TransformCoordinates(
-                    v,
-                    this.lastTransformMatrix
-                )
+        var isVolume = // is the polygon closed?
+            this.extrusionShape[0].equalsWithEpsilon(
+                this.extrusionShape[this.extrusionShape.length - 1],
+                0.001
             ),
+        backFace =
+                this.extrusionShape.map(v =>
+                    BABYLON.Vector3.TransformCoordinates(
+                        v,
+                        this.lastTransformMatrix
+                    )
+                ),
             frontFace =
-            this.extrusionShape.map(v =>
-                BABYLON.Vector3.TransformCoordinates(
-                    v,
-                    currentTransformMatrix
-                )
-            ),
+                this.extrusionShape.map(v =>
+                    BABYLON.Vector3.TransformCoordinates(
+                        v,
+                        currentTransformMatrix
+                    )
+                ),
             numSides = this.extrusionShape.length,
             vertices = backFace.concat(frontFace).map(v => v.asArray()),
             faces = [];
@@ -1065,7 +1070,8 @@ Beetle.prototype.extrudePolygon = function () {
             'prism',
             {
                 custom: { vertex: vertices, face: faces },
-                sideOrientation: BABYLON.Mesh.DOUBLESIDE
+                sideOrientation:
+                    isVolume ? BABYLON.Mesh.FRONTSIDE : BABYLON.Mesh.DOUBLESIDE
             }
         );
         prism.material = BeetleController.Cache.getMaterial(
@@ -1079,14 +1085,7 @@ Beetle.prototype.extrudePolygon = function () {
         this.controller.beetleTrails.push(prism);
         this.extruded = true;
 
-        if (this.extrusionShape[0].equalsWithEpsilon(
-            this.extrusionShape[this.extrusionShape.length - 1],
-            0.001
-        )) {
-            // The first and last point are very close to each other, so
-            // we assume the user is trying to build a closed volume.
-            this.computeExtrusionCaps(currentTransformMatrix);
-        }
+        if (isVolume) { this.computeExtrusionCaps(currentTransformMatrix); }
     }
     this.lastTransformMatrix = currentTransformMatrix.clone();
 };
