@@ -154,10 +154,18 @@ BABYLON.ArcRotateCamera.prototype.isMoving = function () {
 
 BABYLON.ArcRotateCamera.prototype.zoomBy = function (delta) {
     if (!this.fpvEnabled) {
-        // the lower radius limit gets stuck sometimes, so let's set it always
-        this.lowerRadiusLimit = 1.5;
-        this.inertialRadiusOffset = delta * (this.radius / 12);
-        this.framing = false;
+        if (this.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+            this.orthoLeft *= 1 - (delta / 12);
+            this.orthoRight *= 1 - (delta / 12);
+            this.adjustVerticalOrtho();
+            this.radius *= 1 - (delta / 12);
+        } else {
+            // the lower radius limit gets stuck sometimes, so let's set it
+            this.lowerRadiusLimit = 1.5;
+            this.inertialRadiusOffset = delta * (this.radius / 12);
+            this.framing = false;
+        }
+        this.controller.changed();
     }
 };
 
@@ -174,11 +182,13 @@ BABYLON.ArcRotateCamera.prototype.rotateBy = function (deltaXY) {
 };
 
 BABYLON.ArcRotateCamera.prototype.panBy = function (deltaXY) {
+    var factor =
+        this.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA ? 100000 : 10000;
     if (!this.fpvEnabled) {
         var deltaX = deltaXY.x - this.clickOrigin.x,
             deltaY = deltaXY.y - this.clickOrigin.y;
-        this.inertialPanningX = deltaX * (this.radius / -10000);
-        this.inertialPanningY = deltaY * (this.radius / 10000);
+        this.inertialPanningX = deltaX * (this.radius / factor * -1);
+        this.inertialPanningY = deltaY * (this.radius / factor);
         this.framing = false;
     }
 };
@@ -231,6 +241,25 @@ BABYLON.ArcRotateCamera.prototype.restoreViewpoint = function () {
         this.beta = this.oldViewpoint.beta;
         this.radius = this.oldViewpoint.radius;
     }
+};
+
+BABYLON.ArcRotateCamera.prototype.toggleOrtho = function () {
+    if (this.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+        this.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
+        this.radius /= 6;
+    } else {
+        this.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+        this.orthoRight = this.radius / 2;
+        this.orthoLeft = this.orthoRight * -1;
+        this.radius *= 6;
+        this.adjustVerticalOrtho();
+    }
+    this.controller.changed();
+};
+
+BABYLON.ArcRotateCamera.prototype.adjustVerticalOrtho = function () {
+    this.orthoTop = this.orthoRight / 2;
+    this.orthoBottom = this.orthoLeft;
 };
 
 BeetleController.prototype.initLights = function () {
@@ -308,10 +337,10 @@ BeetleController.prototype.clear = function () {
     this.changed();
 };
 
-BeetleController.prototype.currentView = function () {
+BeetleController.prototype.beetleView = function () {
     var wasShowingAxes = this.dialog.axesEnabled(),
         wasShowingBeetle = this.dialog.beetleEnabled(),
-        wasShowingGrid = this.dialog.gridEnabled,
+        wasShowingGrid = this.dialog.gridEnabled(),
         wasFPV = this.dialog.fpvEnabled(),
         canvas = newCanvas(
             new Point(
@@ -355,6 +384,34 @@ BeetleController.prototype.currentView = function () {
     return costume;
 };
 
+BeetleController.prototype.currentView = function () {
+    var canvas = newCanvas(
+            new Point(
+                this.renderWidth,
+                this.renderHeight
+            ),
+            true
+        ),
+        ctx = canvas.getContext('2d'),
+        costume;
+
+    this.scene.clearColor = new BABYLON.Color4(0,0,0,0);
+    this.scene.render();
+    ctx.drawImage(
+        this.glCanvas,
+        0,
+        0,
+        this.renderWidth,
+        this.renderHeight
+    );
+
+    this.scene.clearColor = new BABYLON.Color3(.5,.5,.5);
+    this.scene.render();
+
+    return canvas;
+};
+
+
 // Simple Cache //////////////////////////////////////////////////////////
 
 BeetleController.Cache = {
@@ -377,6 +434,8 @@ BeetleController.Cache.getMaterial = function (color) {
         material.linkEmissiveWithDiffuse = true;
         material.roughness = 1;
         material.specularPower = 512;
+        material.twoSidedLighting = true;
+        material.diffuseFresnelParameters = new BABYLON.FresnelParameters();
         this.materials.set(key, material);
     }
 
@@ -475,7 +534,17 @@ BeetleDialogMorph.prototype.initRenderView = function () {
     this.fullScreenButton.setTop(this.renderView.top() + 2);
     this.fullScreenButton.alpha = 0.5;
 
+    this.renderView.userMenu = () => { this.userMenu() };
+
     this.renderView.step = function () { controller.render(); };
+};
+
+BeetleDialogMorph.prototype.userMenu = function () {
+    var ide = this.controller.stage.parentThatIsA(IDE_Morph),
+        menu = new MenuMorph(ide),
+        view = this.controller.currentView();
+    menu.addItem('pic...', () => { ide.saveCanvasAs(view, 'render') });
+    return menu;
 };
 
 BeetleDialogMorph.prototype.toggleFullScreen = function () {
@@ -575,6 +644,12 @@ BeetleDialogMorph.prototype.initControlPanel = function () {
                 type: 'toggle',
                 action: 'toggleFPV',
                 query: 'fpvEnabled'
+            },
+            {
+                label: 'Orthographic mode',
+                type: 'toggle',
+                action: 'toggleOrtho',
+                query: 'orthoEnabled'
             }
         ],
         [
@@ -760,6 +835,14 @@ BeetleDialogMorph.prototype.toggleFPV = function () {
 
 BeetleDialogMorph.prototype.fpvEnabled = function () {
     return this.controller.camera.fpvEnabled;
+};
+
+BeetleDialogMorph.prototype.toggleOrtho = function () {
+    this.controller.camera.toggleOrtho();
+};
+
+BeetleDialogMorph.prototype.orthoEnabled = function () {
+    return this.controller.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
 };
 
 BeetleDialogMorph.prototype.exportSTL = function () {
@@ -1077,7 +1160,7 @@ Beetle.prototype.extrudePolygon = function () {
         prism.material = BeetleController.Cache.getMaterial(
             this.wings.material.diffuseColor
         );
-        prism.material.backFaceCulling = true;
+        prism.material.backFaceCulling = false;
         prism.material.wireframe = this.controller.wireframeEnabled;
         prism.visibility = this.controller.ghostModeEnabled ? .25 : 1
         prism.convertToFlatShadedMesh();
@@ -1384,5 +1467,5 @@ SnapExtensions.primitives.set('bb_scale(which)', function (which) {
 SnapExtensions.primitives.set('bb_beetleView()', function () {
     var stage = this.parentThatIsA(StageMorph);
     if (!stage.beetleController) { return; }
-    return stage.beetleController.currentView();
+    return stage.beetleController.beetleView();
 });
