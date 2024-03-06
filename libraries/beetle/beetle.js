@@ -258,8 +258,11 @@ BABYLON.ArcRotateCamera.prototype.toggleOrtho = function () {
 };
 
 BABYLON.ArcRotateCamera.prototype.adjustVerticalOrtho = function () {
-    this.orthoTop = this.orthoRight / 2;
-    this.orthoBottom = this.orthoLeft;
+    var offset =
+        (this.controller.renderWidth / this.controller.renderHeight) *
+        (this.radius / 60);
+    this.orthoTop = (this.orthoRight / 2) + offset;
+    this.orthoBottom = this.orthoLeft + offset;
 };
 
 BeetleController.prototype.initLights = function () {
