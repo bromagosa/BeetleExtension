@@ -263,6 +263,8 @@ shape scale to zero, then moving as many steps as deep you want your cone to be.
 
 > ![](scaled_cone.png)
 
+## Advanced Examples
+
 ### Staired Pyramid
 
 A pyramid can also be thought of in different ways. An obvious one is to stack a
@@ -311,9 +313,6 @@ you end up with a real-sized pyramid!
 The same code from before will now generate a ten-story pyramid.
 
 > ![](ten_story_pyramid.png)
-
-
-## Advanced Examples
 
 ### Snail Shell
 
@@ -366,19 +365,24 @@ floor independently.
 
 > ![](tree_cones.png)
 
-## Fractals
-
-### Cesaro Snowflake
-
-### Sierpiński Tetrahedron
-
-### Menger Sponge
-
-### Tree
-
-### Coral
-
 ## Precision Design
+
+Even though the 3D Beetle extension was *not* designed for precision modeling,
+it is actually possible to design some very precise parts, as long as they
+conform to some requirements.
+
+The hardest features to design in the 3D Beetle extension are pockets and
+through holes. Pretty much any shape, even those with holes and pockets, can be
+thought of as a composition of revolution solids and extrusions, but relatively
+complex shapes with several holes, pockets or fillets will prove really
+challenging to design.
+
+Please note again that this extension was never meant to replace precision
+modeling software, such as CAD tools. The examples listed here are but proofs of
+concept to show that *some* precise solids can also be achieved in
+Snap<em>!</em>.
+
+### Hex Nut
 
 ## All Blocks Described
 
