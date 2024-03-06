@@ -132,14 +132,20 @@ BABYLON.ArcRotateCamera.prototype.reset = function () {
     if (this.fpvEnabled) {
         this.setFPV(false);
     }
-    this.radius = 10;
-    this.setTarget(BABYLON.Vector3.Zero());
-    this.setPosition(new BABYLON.Vector3(0, 5, -10));
-    this.alpha = Math.PI / 4;
-    this.framing = false;
-    if (this.framingBehavior) {
-        this.framingBehavior.detach(this);
-        this.framingBehavior = null;
+    if (this.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+        this.toggleOrtho();
+        this.reset();
+        this.toggleOrtho();
+    } else {
+        this.radius = 10;
+        this.setTarget(BABYLON.Vector3.Zero());
+        this.setPosition(new BABYLON.Vector3(0, 5, -10));
+        this.alpha = Math.PI / 4;
+        this.framing = false;
+        if (this.framingBehavior) {
+            this.framingBehavior.detach(this);
+            this.framingBehavior = null;
+        }
     }
 };
 
