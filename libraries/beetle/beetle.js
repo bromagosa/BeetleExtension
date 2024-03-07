@@ -283,7 +283,7 @@ BeetleController.prototype.initLights = function () {
 
 BeetleController.prototype.initGrid = function () {
     var gridMaterial = new BABYLON.GridMaterial('default', this.scene);
-    gridMaterial.majorUnitFrequency = 10;
+    gridMaterial.majorUnitFrequency = 5;
     gridMaterial.gridRatio = 1;
     gridMaterial.backFaceCulling = false;
     gridMaterial.minorUnitVisibility = 0.45;
@@ -293,7 +293,7 @@ BeetleController.prototype.initGrid = function () {
 
     this.grid = BABYLON.MeshBuilder.CreateGround(
         'grid',
-        { width: 100, height: 100 },
+        { width: 200, height: 200 },
         this.scene
     );
     this.grid.material = gridMaterial;
@@ -888,7 +888,7 @@ Beetle.prototype.init = function (controller) {
     this.name = 'beetle';
 
     this.linewidth = 1;
-    this.shapeScale = 1;
+    this.shapeScale = new BABYLON.Vector2(1,1);
     this.movementScale = 1;
 
     this.loadMeshes();
@@ -902,6 +902,7 @@ Beetle.prototype.init = function (controller) {
     this.extrusionShapeSelector = 'circle';
     this.lineTrail = null;
     this.extrusionShape = null;
+    this.lastExtrusionShape = null;
     this.extrusionShapeOutline = null;
     this.extrusionBaseEnabled = true;
     this.updateExtrusionShapeOutline();
@@ -1030,7 +1031,10 @@ Beetle.prototype.newExtrusionShape = function (selector) {
             case 'semicircle':
                 var radius = .5,
                     theta;
-                for (theta = Math.PI * 3 / 2; theta < (Math.PI * 5 / 2) + (Math.PI / 16); theta += Math.PI / 16) {
+                for (theta = Math.PI * 3 / 2;
+                    theta < (Math.PI * 5 / 2) + (Math.PI / 16);
+                    theta += Math.PI / 16
+                ) {
                     path.push(
                         new BABYLON.Vector3(
                             radius * Math.cos(theta),
@@ -1051,6 +1055,16 @@ Beetle.prototype.newExtrusionShape = function (selector) {
     return path;
 };
 
+Beetle.prototype.scaledExtrusionShape = function () {
+    return this.extrusionShape.map(p =>
+        new BABYLON.Vector3(
+            p.x * this.shapeScale.x,
+            0,
+            p.z * this.shapeScale.y
+        )
+    );
+};
+
 Beetle.prototype.updateExtrusionShapeOutline = function () {
     if (this.extrusionShapeOutline) {
         this.controller.scene.removeMesh(this.extrusionShapeOutline);
@@ -1061,13 +1075,12 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
         this.extrusionShapeOutline = BABYLON.MeshBuilder.CreateLines(
             'extrusionShape',
             {
-                points: this.extrusionShape,
+                points: this.scaledExtrusionShape(),
                 useVertexAlpha: false
             },
             this.controller.scene
         );
         this.extrusionShapeOutline.parent = this.body;
-        this.extrusionShapeOutline.scalingDeterminant = this.shapeScale;
         this.extrusionShapeOutline.rotate(BABYLON.Axis.X, Math.PI / -2);
     }
     this.extrusionShapeOutline.visibility =
@@ -1078,6 +1091,7 @@ Beetle.prototype.updateExtrusionShapeOutline = function () {
         // yet
         this.lastTransformMatrix =
             this.extrusionShapeOutline.computeWorldMatrix(true).clone();
+        this.lastExtrusionShape = this.scaledExtrusionShape();
     }
 };
 
@@ -1130,15 +1144,15 @@ Beetle.prototype.extrudePolygon = function () {
                 this.extrusionShape[this.extrusionShape.length - 1],
                 0.001
             ),
-        backFace =
-                this.extrusionShape.map(v =>
+            backFace =
+                this.lastExtrusionShape.map(v =>
                     BABYLON.Vector3.TransformCoordinates(
                         v,
                         this.lastTransformMatrix
                     )
                 ),
             frontFace =
-                this.extrusionShape.map(v =>
+                this.scaledExtrusionShape().map(v =>
                     BABYLON.Vector3.TransformCoordinates(
                         v,
                         currentTransformMatrix
@@ -1180,6 +1194,7 @@ Beetle.prototype.extrudePolygon = function () {
         if (isVolume) { this.computeExtrusionCaps(currentTransformMatrix); }
     }
     this.lastTransformMatrix = currentTransformMatrix.clone();
+    this.lastExtrusionShape = this.scaledExtrusionShape();
 };
 
 Beetle.prototype.computeExtrusionCaps = function (currentTransformMatrix) {
@@ -1199,7 +1214,7 @@ Beetle.prototype.computeExtrusionCaps = function (currentTransformMatrix) {
             BABYLON.MeshBuilder.CreatePolygon(
                 'backcap',
                 {
-                    shape: this.extrusionShape,
+                    shape: this.scaledExtrusionShape(),
                     updatable: false
                 },
                 this.controller.scene
@@ -1218,7 +1233,7 @@ Beetle.prototype.computeExtrusionCaps = function (currentTransformMatrix) {
         BABYLON.MeshBuilder.CreatePolygon(
             'frontcap',
             {
-                shape: this.extrusionShape,
+                shape: this.scaledExtrusionShape(),
                 updatable: false,
                 sideOrientation: BABYLON.Mesh.BACKSIDE
             },
@@ -1240,6 +1255,7 @@ Beetle.prototype.stopExtruding = function () {
     this.extruding = false;
     this.extruded = false;
     this.lastTransformMatrix = null;
+    this.lastExtrusionShape = null;
     this.lastCap = null;
     this.extrusionShapeOutline.visibility = 0;
     this.lineTrail = null;
@@ -1351,8 +1367,19 @@ Beetle.prototype.pointTo = function (x, y, z) {
 };
 
 Beetle.prototype.setScale = function (scale, which) {
-    this[which + 'Scale'] = scale;
-    if (which == 'shape') { this.updateExtrusionShapeOutline(); }
+    if (which == 'shape') {
+        if (typeof scale === 'number') {
+            scale = new BABYLON.Vector2(scale, scale);
+        } else if (scale instanceof List) {
+            scale = new BABYLON.Vector2(
+                scale.itemsArray()[0], scale.itemsArray()[1]
+            );
+        }
+        this.shapeScale = scale;
+        this.updateExtrusionShapeOutline();
+    } else {
+        this.movementScale = scale;
+    }
 };
 
 
@@ -1468,9 +1495,18 @@ SnapExtensions.primitives.set(
 });
 
 SnapExtensions.primitives.set('bb_scale(which)', function (which) {
-    var stage = this.parentThatIsA(StageMorph);
+    var stage = this.parentThatIsA(StageMorph),
+        scale;
     if (!stage.beetleController) { return; }
-    return stage.beetleController.beetle[which + 'Scale'];
+    scale = stage.beetleController.beetle[which + 'Scale'];
+    if (which === 'shape') {
+        if (scale.x === scale.y) {
+            scale = scale.x;
+        } else {
+            scale = new List([scale.x, scale.y]);
+        }
+    }
+    return scale;
 });
 
 SnapExtensions.primitives.set('bb_beetleView()', function () {
