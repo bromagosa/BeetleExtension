@@ -25,18 +25,23 @@ features that you will easily adapt to.
 You can refer to the [blocks reference](#all-blocks-described) at the end of
 this article to learn what every single block does.
 
-## Overview and Abstractions
+## Overview and Abstractions 
+
+First of all, you will need to open the 3D viewport in order to be able to see
+the Beetle and the geometries you generate. To do so, navigate to the *3D
+Beetle* category and click on the button at the top of the blocks palette,
+labeled *Open 3D Window*.
 
 ### The Beetle
 
-The Beetle is a character that can move around 3D space. Here's what it looks
+The Beetle is a character that can move around in 3D space. Here's what it looks
 like in its default color:
 
 > ![beetle](beetle.png)
 
 This character is to 3D what the Lego turtle is to 2D. Turtles can move on a 2D
 plane, but beetles can additionally fly and dig underground, which makes them
-very apt for exploring the third dimension.
+very apt at exploring the third dimension.
 
 ### Movement and Rotation
 
@@ -57,7 +62,12 @@ we call **extrusion**. Extruding is leaving a 3D trail along a path. Think of it
 as if the Beetle was carrying a pastry tube, or one of these play dough
 extruders, with interchangeable headers.
 
-> ![The beetle and its movement and rotation axes](playdough_extruder.png)
+> ![A render of a playdough extruder](playdough_extruder.png)
+
+Extrusion is the only way to generate geometry in the 3D beetle extension, but
+it is a very powerful construct. As you gain experience with the extension
+you'll find that all shapes can be constructed in terms of extrusions of 2D
+profiles and polygons.
 
 #### Extruding a Point
 
@@ -104,14 +114,66 @@ shape:
 > ![The beetle has extruded a truncated triangle along a
 path](custom_polygon_extrusion.png)
 
-# Examples
+#### Scale and Offset
 
-First of all, you will need to open the 3D viewport in order to be able to see
-the Beetle and the geometries you generate. To do so, navigate to the *3D
-Beetle* category and click on the button at the top of the blocks palette,
-labeled *Open 3D Window*.
+Extrusion shapes can be scaled up or down by using the ![](blocks/set_scale.png)
+block. The scale is a multiplier that is applied to the dimensions of the
+current extrusion shape.
 
-## Basic Solids
+> ![](scaled_extrusion.png)
+
+Note that, as is often the case in Snap<em>!</em>, you can drop a list into the
+scale block to get it to affect the width and height of the shape separately.
+
+> ![](list_scale.png)
+
+Another operation you can apply to the current extrusion shape is an offset.
+This will affect the position of the extrusion shape relative to the Beetle.
+
+> ![](offset_extrusion.png)
+
+#### Complex Extrusion Bases
+
+Many shapes can be thought of in terms of combinations of the basic extrusion
+shapes and their possible scaling and offsetting transformations. Others can
+relatively easily be expressed as a list of points. Sometimes, though, your
+extrusion base may be too complex to input manually into a list.
+
+In these cases you'll want to use the `log sprite positions` block to trace the
+path followed by a Snap<em>!</em> sprite and turn into an extrusion base.
+
+> ![](star_extrusion.png)
+
+#### Arbitrary Extrusion Base Transformations
+
+All extrusion shapes are just lists of points, which are in turn just lists of
+two numbers. Here's the list of points of the default triangle extrusion:
+
+![](shape_points.png)
+
+Thus, you can apply any transformations you wish to the shape as you would with
+any other list in Snap<em>!</em>. For instance, you could apply a `ceiling`
+operation to the triangle shape to turn it into a right triangle:
+
+> ![](right_triangle.png)
+
+#### Zero-step Extrusion
+
+A very powerful construct in the 3D Beetle extension is the zero-step extrusion.
+When you ask the beetle to move zero steps while extruding, it will generate a
+face in 3D space. This in itself may not sound too useful, but in combination
+with rotation and scaling it can produce incredibly complex results. For
+instance, here's how to generate a smooth corner by performing a series of turns
+with zero-step extrusions in between:
+
+> ![](smooth_corner.png)
+
+In the examples section you'll see zero-step extrusion used extensively to
+generate a wide variety of shapes, such as revolution solids.
+
+## Examples
+
+### Basic Solids
 
 Since the only way to generate volumes with the Beetle is to extrude 2D shapes
 along a path, it can be interesting to start by taking a look at how to generate
@@ -121,7 +183,7 @@ An important block that you may want to have at hand is ![](reset.png). This
 block will remove all geometry from the 3D view, and get the Beetle back to its
 original position.
 
-### Cube
+#### Cube
 
 A cube can be understood as an extrusion of a square. Let's begin by selecting
 the correct extrusion base from the dropdown menu in the following block:
@@ -139,13 +201,13 @@ walk one single step:
 
 > ![](cube.png)
 
-### Cylinder
+#### Cylinder
 
 Similarly, extruding a circle will produce a cylinder.
 
 > ![](cylinder.png)
 
-### Tube
+#### Tube
 
 Here's where things can begin to get a little bit tricky. If you want the
 cylinder to have no caps -that is, if you want to generate a tube-, you can't
@@ -159,12 +221,23 @@ generating the walls of the cylinder one by one as the beetle walks in a circle:
 
 > ![](tube_code.png)
 
-To change the height of the tube you will need to specify a custom line to
-extrude:
+To change the height of the tube you could specify a custom line to extrude:
 
 > ![](long_tube_code.png)
 
-### Tube with Thick Walls
+Or you could simply change the scale of the shape:
+
+> ![](tube_scale.png)
+
+If you want the tube to be centered on the beetle, you can do so by offsetting
+the shape and performing a series of zero-step extrusions.
+
+> ![](tube_centered.png)
+
+Notice how you'll need to add an extra zero-step extrusion after the loop in
+order to close the cylinder.
+
+#### Tube with Thick Walls
 
 The previous tube has walls of zero thickness. An easy way to achieve a thick
 wall is to extrude a custom rectangle along a circular path:
@@ -182,7 +255,47 @@ move zero steps after the loop:
 
 > ![](thick_tube_code.png)
 
-### Sphere
+An even easier way to generate a tube with thick walls is to scale a square
+non-uniformly. The _x_ scale will define the thickness of the walls, while the
+_y_ scale will define the height of the tube.
+
+> ![](thick_tube_square.png)
+
+As is very often the case, there are multiple ways to think of a shape. You
+could also generate a tube by extruding two semiannuli (yes, that's the word
+mathematicians use for half a ring). You can first experiment with drawing the
+semiannulus in turtle geometry in Snap<em>!</em>, which will _definitely_ be
+much easier if you first load the Arcs library from the Library Browser.
+
+> ![](semiannulus.png)
+
+You can now turn that shape into an extrusion base by wrapping the script in a
+`log sprite positions` block:
+
+> ![](semiannulus_base.png)
+
+Notice how this created a huge base. A single step for a Snap<em>!</em> sprite
+becomes a millimeter in the Beetle world, and beetles are tiny critters. This
+also helps increase the precision of your shapes. In this case, though, you can
+apply a scale multiplier to bring the size down.
+
+The only thing missing now is to extrude this shape twice while rotating it in
+between.
+
+> ![](semiannulus_tube.png)
+
+This is obviously too much of a hassle if all you wanted is to generate a tube,
+but it opens the door to a completely different set of shapes that wouldn't be
+possible with a rectangular-based tube extrusion, such as this thimble:
+
+> ![](thimble.png)
+
+Or this smoothly bent tube:
+
+> ![](bent_tube.png)
+
+
+#### Sphere
 
 Extruding with zero-movement steps lets you generate revolution solids rather
 easily.
@@ -206,12 +319,13 @@ geometry really looks like.
 Most 3D software will take this sphere without flinching, but others will
 complain that the geometry is not correct and show it to you like it really is:
 
-> ![](cura_errors.png) ![](meshlab_errors.png)
+> ![](meshlab_errors.png)
 
-### Sphere with Proper Geometry
+#### Sphere with Proper Geometry
 
-The proper way to make a sphere is to revolve an open semicircle so that only
-the outer shell is generated, and with its facets always facing the correct way.
+If your 3D software complains, then the "proper" way to make a sphere is to
+revolve an open semicircle so that only the outer shell is generated, and with
+its facets always facing the correct way.
 
 > ![](proper_sphere.png)
 
@@ -222,9 +336,9 @@ The geometry now looks perfectly fine in wireframe mode.
 Additionally, all 3D software renders it properly with no complaints about
 reverse facets or internal faces.
 
-> ![](cura_ok.png) ![](meshlab_ok.png)
+> ![](meshlab_ok.png)
 
-### Cone
+#### Cone
 
 A cone can be understood as a revolution of a triangle. You could, thus, extrude
 a triangle while turning around the Z axis and moving zero steps at each
@@ -240,7 +354,7 @@ will be frowned upon by some 3D software:
 Just like before, the culprits are some of the faces that have ended up
 inside-out.
 
-### Cone with Proper Geometry
+#### Cone with Proper Geometry
 
 To get a proper cone we will have to revolve two lines forming an acute angle.
 
@@ -263,9 +377,23 @@ shape scale to zero, then moving as many steps as deep you want your cone to be.
 
 > ![](scaled_cone.png)
 
-## Advanced Examples
+### Advanced Examples
 
-### Staired Pyramid
+#### Pine Tree
+
+A simple pine tree can be generated by revolving a 2D zig-zag pattern. You can
+use the already familiar `log sprite positions` block to get a list of points
+that follow said zig-zag pattern.
+
+> ![](tree.png)
+
+A similar tree can be generated by extruding a succession of smaller and smaller
+rather flat cones. This method will also allow you to tweak the color of each
+floor independently.
+
+> ![](tree_cones.png)
+
+#### Staired Pyramid
 
 A pyramid can also be thought of in different ways. An obvious one is to stack a
 bunch of flat square boxes one on top of the other in decreasing sizes.
@@ -303,10 +431,9 @@ have a bottom face.
 
 > ![](stair_turtle.png)
 
-Now you don't need the pen code anymore. You can just create a temporary
-variable and push all the positions into it, then use it as the base shape of
-your extrusion. While you're at it, you can make the movement steps smaller else
-you end up with a real-sized pyramid!
+Now you don't need the pen code anymore. You can just wrap the movement code in
+a `log sprite positions` block and start extruding that shape.  While you're at
+it, you can scale it down else you end up with a real-sized pyramid!
 
 > ![](stairwell_base.png)
 
@@ -314,7 +441,7 @@ The same code from before will now generate a ten-story pyramid.
 
 > ![](ten_story_pyramid.png)
 
-### Snail Shell
+#### Snail Shell
 
 This is a classic example brought straight from Beetle Blocks. You begin by
 making a torus, or a doughnut, with a circular extrusion.
@@ -347,43 +474,6 @@ a little bit with the pen color.
 
 > ![](color_snail.png)
 
-### Pine Tree
-
-The traditional Beetle Blocks way to generate a pine tree would be to extrude a
-bunch of long cylinders in a circle, then repeat that circle while going up the
-trunk and scaling it down a bit for each floor until reaching the top of the
-tree.
-
-While this is a valid exercise, it is also interesting to generate the tree in a
-different way by revolving a 2D zig-zag pattern.
-
-> ![](tree.png)
-
-A similar tree can be generated by extruding a succession of smaller and smaller
-rather flat cones. This method will also allow you to tweak the color of each
-floor independently.
-
-> ![](tree_cones.png)
-
-## Precision Design
-
-Even though the 3D Beetle extension was *not* designed for precision modeling,
-it is actually possible to design some very precise parts, as long as they
-conform to some requirements.
-
-The hardest features to design in the 3D Beetle extension are pockets and
-through holes. Pretty much any shape, even those with holes and pockets, can be
-thought of as a composition of revolution solids and extrusions, but relatively
-complex shapes with several holes, pockets or fillets will prove really
-challenging to design.
-
-Please note again that this extension was never meant to replace precision
-modeling software, such as CAD tools. The examples listed here are but proofs of
-concept to show that *some* precise solids can also be achieved in
-Snap<em>!</em>.
-
-### Hex Nut
-
 ## All Blocks Described
 
 | | |
@@ -404,11 +494,16 @@ Snap<em>!</em>.
 | ![](blocks/point_to.png) | Gets the Beetle to look straight towards a point in 3D space. Takes a 3-element list in the form `(x y z)` as an input. |
 | ![](blocks/rotation.png) | Reports the Beetle's current rotation relative to the specified axis. |
 | | &nbsp; |
-| ![](blocks/start_extruding.png) | Starts leaving a trail in the specified shape. Also accepts a list of 2D points in the form `(( x1 y1 ) (x2 y2) (x3 y3) ... )` as a base shape, such that it describes a curve or closed polygon. The Beetle will consider the list to describe a closed polygon when the first and last points are the same. |
+| ![](blocks/start_extruding.png) | Starts leaving a trail in the specified shape. Also accepts a list of 2D points in the form `(( x1 y1 ) (x2 y2) (x3 y3) ... )` as a base shape, such that it describes a curve or closed polygon. The Beetle will consider the list to describe a closed polygon when the first and last points are the same. The `sprite positions` menu options needs to be used in conjunction with the `log sprite positions` block. |
 | ![](blocks/stop_extruding.png) | Stops leaving a trail. |
 | | &nbsp; |
-| ![](blocks/set_scale.png) | Sets the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, to the specified value. |
-| ![](blocks/change_scale.png) | Changes the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, by the specified amount. |
+| ![](blocks/log_sprite_positions.png) | Records all positions visited by a regular Snap<em>!</em> sprite while running the blocks inside so that they can be extruded later by the Beetle. To extrude the logged positions, select `sprite positions` from the dropdown menu in the `start extruding` block. |
+| | &nbsp; |
+| ![](blocks/shape_points.png) | Returns a list of all points that make up the current extrusion base. |
+| | &nbsp; |
+| ![](blocks/set_shape_offset.png) | Offsets the extrusion center by amounts specified by the provided two-item list. The first item in the list represents the horizontal offset, and the second one represents the vertical offset. |
+| ![](blocks/set_scale.png) | Sets the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, to the specified value. When *shape* is selected, if provided with a list of two numbers, the first one will affect the horizontal scale and the second one will affect the vertical scale of the shape. |
+| ![](blocks/change_scale.png) | Changes the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, by the specified amount. When *shape* is selected, if provided with a list of two numbers, the first one will affect the horizontal scale and the second one will affect the vertical scale of the shape. |
 | ![](blocks/scale.png) | Reports the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection. |
 | | &nbsp; |
 | ![](blocks/push_position.png) | Stores the current Beetle position and rotation, so that it can be revisited later. |
