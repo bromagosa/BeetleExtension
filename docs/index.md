@@ -1,3 +1,14 @@
+# Where is Beetle Blocks???
+
+Dear former Beetle Blocks users - we are deeply sorry to inform you that due to
+a billing problem with our cloud provider we have unfortunately lost all of our
+and your project data, with no means to recover any of it :'(
+
+We are working on an experimental extension for Snap<em>!</em> that will support
+all that Beetle Blocks did, and some more.
+
+You can find the preliminary documentation for the upcoming extension below.
+
 # 3D Beetle Extension
 
 ## A Tiny Bit of History
