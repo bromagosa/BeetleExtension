@@ -1,6 +1,5 @@
 <html><head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8">
-        <script src="marked.min.js" integrity="sha256-GGbzkRkTtLnv3bOg61WAnkjYHxtsiVqu+tjMj6ssDVw=" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked@1.1.0/marked.min.js" integrity="sha256-GGbzkRkTtLnv3bOg61WAnkjYHxtsiVqu+tjMj6ssDVw=" crossorigin="anonymous"></script>
         <style>
 html { background: #aaa; }
 
@@ -72,7 +71,7 @@ all that Beetle Blocks did, and some more.</p>
 <p>You can find the preliminary documentation for the upcoming extension below.</p>
 <h1 id="3d-beetle-extension">3D Beetle Extension</h1>
 <h2 id="a-tiny-bit-of-history">A Tiny Bit of History</h2>
-<p>The 3D Beetle extension is heavily inspired in the <a href="http://beetleblocks.com/">Beetle
+<p>The 3D Beetle extension is heavily inspired in the <a href="http://beetleblocks.com">Beetle
 Blocks</a> Snap<em>!</em> mod, originally designed by Eric
 Rosenbaum and Duks Koschitz and developed by Bernat Romagosa during the years
 2014-2020.</p>
@@ -165,7 +164,7 @@ shape:</p>
 path"></p>
 </blockquote>
 <h4 id="scale-and-offset">Scale and Offset</h4>
-<p>Extrusion shapes can be scaled up or down by using the <img src="set_scale.png" alt="">
+<p>Extrusion shapes can be scaled up or down by using the <img src="blocks/set_scale.png" alt="">
 block. The scale is a multiplier that is applied to the dimensions of the
 current extrusion shape.</p>
 <blockquote>
@@ -194,7 +193,7 @@ path followed by a Snap<em>!</em> sprite and turn into an extrusion base.</p>
 <h4 id="arbitrary-extrusion-base-transformations">Arbitrary Extrusion Base Transformations</h4>
 <p>All extrusion shapes are just lists of points, which are in turn just lists of
 two numbers. Here's the list of points of the default triangle extrusion:</p>
-<p><img src="shape_points_002.png" alt=""></p>
+<p><img src="shape_points.png" alt=""></p>
 <p>Thus, you can apply any transformations you wish to the shape as you would with
 any other list in Snap<em>!</em>. For instance, you could apply a <code>ceiling</code>
 operation to the triangle shape to turn it into a right triangle:</p>
@@ -218,7 +217,7 @@ generate a wide variety of shapes, such as revolution solids.</p>
 <p>Since the only way to generate volumes with the Beetle is to extrude 2D shapes
 along a path, it can be interesting to start by taking a look at how to generate
 a bunch of basic solids.</p>
-<p>An important block that you may want to have at hand is <img src="reset_002.png" alt="">. This
+<p>An important block that you may want to have at hand is <img src="reset.png" alt="">. This
 block will remove all geometry from the 3D view, and get the Beetle back to its
 original position.</p>
 <h4 id="cube">Cube</h4>
@@ -272,16 +271,6 @@ order to close the cylinder.</p>
 <h4 id="tube-with-thick-walls">Tube with Thick Walls</h4>
 <p>The previous tube has walls of zero thickness. An easy way to achieve a thick
 wall is to extrude a custom rectangle along a circular path:</p>
-<blockquote>
-<p><img src="thick_glitched_tube_code.png" alt=""></p>
-</blockquote>
-<p>Notice how the tube presents a little glitch. The last extrusion step didn't
-quite close the walls as you may have expected. That is because the extrusion
-step is performed when the beetle moves, and the beetle moved before the last
-15º rotation, when it happened to end up at the same spot and rotation it
-started from.</p>
-<p>One simple solution is to perform an extra extrusion by asking the beetle to
-move zero steps after the loop:</p>
 <blockquote>
 <p><img src="thick_tube_code.png" alt=""></p>
 </blockquote>
@@ -496,9 +485,7 @@ a little bit with the pen color.</p>
 </thead>
 <tbody><tr>
 <td><img src="blocks/reset.png" alt=""></td>
-<td>Erases all 3D geometry and takes the Beetle back to its original 
-position and orientation. It also erases the position and rotation stack
- (see push/pop position blocks). It does keep the current Beetle color.</td>
+<td>Erases all 3D geometry and takes the Beetle back to its original position and orientation. It also erases the position and rotation stack (see push/pop position blocks). It does keep the current Beetle color.</td>
 </tr>
 <tr>
 <td><img src="blocks/go_home.png" alt=""></td>
@@ -562,10 +549,7 @@ position and orientation. It also erases the position and rotation stack
 </tr>
 <tr>
 <td><img src="blocks/start_extruding.png" alt=""></td>
-<td>Starts leaving a trail in the specified shape. Also accepts a list of 2D points in the form <code>(( x1 y1 ) (x2 y2) (x3 y3) ... )</code>
- as a base shape, such that it describes a curve or closed polygon. The 
-Beetle will consider the list to describe a closed polygon when the 
-first and last points are the same. The <code>sprite positions</code> menu options needs to be used in conjunction with the <code>log sprite positions</code> block.</td>
+<td>Starts leaving a trail in the specified shape. Also accepts a list of 2D points in the form <code>(( x1 y1 ) (x2 y2) (x3 y3) ... )</code> as a base shape, such that it describes a curve or closed polygon. The Beetle will consider the list to describe a closed polygon when the first and last points are the same. The <code>sprite positions</code> menu options needs to be used in conjunction with the <code>log sprite positions</code> block.</td>
 </tr>
 <tr>
 <td><img src="blocks/stop_extruding.png" alt=""></td>
@@ -577,9 +561,7 @@ first and last points are the same. The <code>sprite positions</code> menu optio
 </tr>
 <tr>
 <td><img src="blocks/log_sprite_positions.png" alt=""></td>
-<td>Records all positions visited by a regular Snap<em>!</em> sprite 
-while running the blocks inside so that they can be extruded later by 
-the Beetle. To extrude the logged positions, select <code>sprite positions</code> from the dropdown menu in the <code>start extruding</code> block.</td>
+<td>Records all positions visited by a regular Snap<em>!</em> sprite while running the blocks inside so that they can be extruded later by the Beetle. To extrude the logged positions, select <code>sprite positions</code> from the dropdown menu in the <code>start extruding</code> block.</td>
 </tr>
 <tr>
 <td></td>
@@ -595,30 +577,19 @@ the Beetle. To extrude the logged positions, select <code>sprite positions</code
 </tr>
 <tr>
 <td><img src="blocks/set_shape_offset.png" alt=""></td>
-<td>Offsets the extrusion center by amounts specified by the provided 
-two-item list. The first item in the list represents the horizontal 
-offset, and the second one represents the vertical offset.</td>
+<td>Offsets the extrusion center by amounts specified by the provided two-item list. The first item in the list represents the horizontal offset, and the second one represents the vertical offset.</td>
 </tr>
 <tr>
 <td><img src="blocks/set_scale.png" alt=""></td>
-<td>Sets the scale (multiplier) of the extrusion trail section, or the 
-scale of the Beetle's movements, depending on the selection, to the 
-specified value. When <em>shape</em> is selected, if provided with a 
-list of two numbers, the first one will affect the horizontal scale and 
-the second one will affect the vertical scale of the shape.</td>
+<td>Sets the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, to the specified value. When <em>shape</em> is selected, if provided with a list of two numbers, the first one will affect the horizontal scale and the second one will affect the vertical scale of the shape.</td>
 </tr>
 <tr>
 <td><img src="blocks/change_scale.png" alt=""></td>
-<td>Changes the scale (multiplier) of the extrusion trail section, or 
-the scale of the Beetle's movements, depending on the selection, by the 
-specified amount. When <em>shape</em> is selected, if provided with a 
-list of two numbers, the first one will affect the horizontal scale and 
-the second one will affect the vertical scale of the shape.</td>
+<td>Changes the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection, by the specified amount. When <em>shape</em> is selected, if provided with a list of two numbers, the first one will affect the horizontal scale and the second one will affect the vertical scale of the shape.</td>
 </tr>
 <tr>
 <td><img src="blocks/scale.png" alt=""></td>
-<td>Reports the scale (multiplier) of the extrusion trail section, or 
-the scale of the Beetle's movements, depending on the selection.</td>
+<td>Reports the scale (multiplier) of the extrusion trail section, or the scale of the Beetle's movements, depending on the selection.</td>
 </tr>
 <tr>
 <td></td>
@@ -642,3 +613,4 @@ the scale of the Beetle's movements, depending on the selection.</td>
 </tr>
 </tbody></table>
 </body></html>
+

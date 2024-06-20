@@ -253,17 +253,6 @@ order to close the cylinder.
 The previous tube has walls of zero thickness. An easy way to achieve a thick
 wall is to extrude a custom rectangle along a circular path:
 
-> ![](thick_glitched_tube_code.png)
-
-Notice how the tube presents a little glitch. The last extrusion step didn't
-quite close the walls as you may have expected. That is because the extrusion
-step is performed when the beetle moves, and the beetle moved before the last
-15º rotation, when it happened to end up at the same spot and rotation it
-started from.
-
-One simple solution is to perform an extra extrusion by asking the beetle to
-move zero steps after the loop:
-
 > ![](thick_tube_code.png)
 
 An even easier way to generate a tube with thick walls is to scale a square
