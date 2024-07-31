@@ -4,18 +4,16 @@ Dear former Beetle Blocks users - we are deeply sorry to inform you that due to
 a billing problem with our cloud provider we have unfortunately lost all of our
 and your project data, with no means to recover any of it :'(
 
-We are working on an experimental extension for Snap<em>!</em> that will support
-all that Beetle Blocks did, and some more.
+As a replacement, though, we do have a new extension for Snap<em>!</em> that
+supports all that Beetle Blocks did, and some more.
 
-The 3D Beetle extension is going to be officially released with Snap<em>!</em>
-v10 later this summer, but if you can't wait to try it, you can always run the
-Snap<em>!</em> development version at
-[https://snap.berkeley.edu/versions/dev](https://snap.berkeley.edu/versions/dev).
+The 3D Beetle extension is officially part of
+[Snap<em>!</em>](https://snap.berkeley.edu/run).
 
 To load it, navigate to the *project menu*, select *Libraries* and import the
 *3D Beetle* extension.
 
-You can find the preliminary documentation for the upcoming extension below.
+You can find the documentation for the extension below.
 
 # 3D Beetle Extension
 
